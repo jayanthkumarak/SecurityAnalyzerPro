@@ -1,0 +1,172 @@
+{
+  "name": "security-analyzer-pro",
+  "version": "1.0.0",
+  "description": "AI-powered digital forensics platform with MITRE ATT&CK integration",
+  "main": "dist/main/index.js",
+  "homepage": "https://github.com/jayanthkumarak/SecurityAnalyzerPro",
+  "author": {
+    "name": "Jayanth Kumar",
+    "email": "jayanthkumarak@gmail.com",
+    "url": "https://github.com/jayanthkumarak"
+  },
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jayanthkumarak/SecurityAnalyzerPro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jayanthkumarak/SecurityAnalyzerPro/issues"
+  },
+  "keywords": [
+    "forensics",
+    "security",
+    "ai",
+    "mitre-attack",
+    "electron",
+    "threat-intelligence",
+    "incident-response",
+    "digital-forensics"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+    "dev:main": "webpack --config webpack.main.config.js --mode development --watch",
+    "dev:renderer": "webpack serve --config webpack.renderer.config.js --mode development",
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "webpack --config webpack.main.config.js --mode production",
+    "build:renderer": "webpack --config webpack.renderer.config.js --mode production",
+    "start": "electron dist/main/index.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:e2e": "playwright test",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css,md}\"",
+    "prepare": "husky install",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3",
+    "@headlessui/react": "^1.7.18",
+    "@heroicons/react": "^2.0.18",
+    "@tanstack/react-query": "^5.28.9",
+    "better-sqlite3": "^9.4.3",
+    "crypto-js": "^4.2.0",
+    "date-fns": "^3.6.0",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.8",
+    "framer-motion": "^11.0.24",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.3",
+    "recharts": "^2.12.2",
+    "uuid": "^9.0.1",
+    "winston": "^3.12.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.42.1",
+    "@types/crypto-js": "^4.2.2",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.73",
+    "@types/react-dom": "^18.2.22",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "css-loader": "^6.10.0",
+    "electron": "^29.1.6",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.6.0",
+    "husky": "^9.0.11",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.2",
+    "mini-css-extract-plugin": "^2.8.1",
+    "postcss": "^8.4.38",
+    "postcss-loader": "^8.1.1",
+    "prettier": "^3.2.5",
+    "style-loader": "^3.3.4",
+    "tailwindcss": "^3.4.3",
+    "ts-jest": "^29.1.2",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.4"
+  },
+  "build": {
+    "appId": "com.jayanthkumar.security-analyzer-pro",
+    "productName": "SecurityAnalyzer Pro",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      "assets/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  }
+}
