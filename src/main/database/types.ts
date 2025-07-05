@@ -325,3 +325,77 @@ export interface EvidenceFilters {
   created_after?: Date;
   created_before?: Date;
 }
+
+// Security enhancements for Session 3
+export type SecurityLevel = 'low' | 'medium' | 'high' | 'critical';
+export type AuthenticationMethod = 'password' | 'certificate' | 'biometric' | 'token';
+export type UserRole = 'admin' | 'investigator' | 'analyst' | 'viewer' | 'auditor';
+export type Permission = 
+  | 'case:create' | 'case:read' | 'case:update' | 'case:delete' 
+  | 'evidence:create' | 'evidence:read' | 'evidence:update' | 'evidence:delete'
+  | 'analysis:create' | 'analysis:read' | 'analysis:update' | 'analysis:delete'
+  | 'audit:read' | 'audit:export' | 'system:configure' | 'user:manage';
+
+export interface SecurityContext {
+  user_id: string;
+  username: string;
+  roles: UserRole[];
+  permissions: Permission[];
+  security_level: SecurityLevel;
+  authentication_method: AuthenticationMethod;
+  session_id: string;
+  session_expires: Date;
+  ip_address?: string;
+  user_agent?: string;
+  last_activity: Date;
+  mfa_verified: boolean;
+  account_locked: boolean;
+  failed_login_attempts: number;
+}
+
+export interface SecurityPolicy {
+  resource_type: string;
+  operation: string;
+  required_permissions: Permission[];
+  minimum_security_level: SecurityLevel;
+  required_roles: UserRole[];
+  audit_required: boolean;
+  approval_required: boolean;
+  rate_limit?: number;
+  time_restrictions?: {
+    allowed_hours: number[];
+    allowed_days: number[];
+  };
+}
+
+export interface SecurityIncident {
+  id: string;
+  incident_type: 'authentication_failure' | 'authorization_violation' | 'data_breach' | 'suspicious_activity' | 'policy_violation';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  user_id?: string;
+  session_id?: string;
+  resource_type?: string;
+  resource_id?: string;
+  details: Record<string, any>;
+  threat_indicators: string[];
+  mitigation_actions: string[];
+  status: 'open' | 'investigating' | 'resolved' | 'false_positive';
+  created_at: Date;
+  updated_at: Date;
+  assigned_to?: string;
+  escalated: boolean;
+}
+
+export interface SessionData {
+  session_id: string;
+  user_id: string;
+  created_at: Date;
+  last_activity: Date;
+  expires_at: Date;
+  ip_address?: string;
+  user_agent?: string;
+  security_context: SecurityContext;
+  active: boolean;
+  terminated_reason?: string;
+  terminated_at?: Date;
+}
