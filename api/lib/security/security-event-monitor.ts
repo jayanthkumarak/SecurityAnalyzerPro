@@ -5,7 +5,6 @@ import { SecurityAwareErrorHandler } from './error-handler';
 import { AuditService } from '../services/audit-service';
 import {
   SecurityContext,
-  SecurityIncident,
   AuditEvent,
 } from '../database/types';
 
@@ -77,8 +76,8 @@ export class SecurityEventMonitor extends EventEmitter {
   private securityMetrics: SecurityMetrics[] = [];
   
   private monitoringActive = false;
-  private monitoringInterval: NodeJS.Timer | null = null;
-  private metricsInterval: NodeJS.Timer | null = null;
+  private monitoringInterval: NodeJS.Timeout | null = null;
+  private metricsInterval: NodeJS.Timeout | null = null;
   
   private readonly MAX_METRICS_HISTORY = 24 * 60; // 24 hours of minute-by-minute data
   private readonly MONITORING_INTERVAL_MS = 30000; // 30 seconds
@@ -271,7 +270,6 @@ export class SecurityEventMonitor extends EventEmitter {
   private async collectSecurityMetrics(): Promise<void> {
     try {
       const now = new Date();
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       const errorStats = this.errorHandler.getErrorStatistics();
@@ -322,7 +320,7 @@ export class SecurityEventMonitor extends EventEmitter {
   private async createThreatAlert(
     event: AuditEvent,
     signature: ThreatSignature,
-    context: SecurityContext
+    _context: SecurityContext
   ): Promise<SecurityAlert> {
     return {
       id: crypto.randomUUID(),
@@ -344,7 +342,7 @@ export class SecurityEventMonitor extends EventEmitter {
   private async createRuleAlert(
     event: AuditEvent,
     rule: MonitoringRule,
-    context: SecurityContext
+    _context: SecurityContext
   ): Promise<SecurityAlert> {
     return {
       id: crypto.randomUUID(),
@@ -364,30 +362,35 @@ export class SecurityEventMonitor extends EventEmitter {
 
   private async detectBehavioralAnomalies(
     event: AuditEvent,
-    context: SecurityContext
+    _context: SecurityContext
   ): Promise<SecurityAlert[]> {
     const alerts: SecurityAlert[] = [];
 
     // Check for unusual access patterns
     if (event.event_type === 'data_access') {
       const recentAccess = this.securityMetrics.slice(-60); // Last hour
-      const avgAccess = recentAccess.reduce((sum, m) => sum + m.data_access_events_last_hour, 0) / recentAccess.length;
-      
-      if (recentAccess.length > 0 && recentAccess[recentAccess.length - 1].data_access_events_last_hour > avgAccess * 3) {
-        alerts.push({
-          id: crypto.randomUUID(),
-          alert_type: 'anomaly_detected',
-          severity: 'medium',
-          title: 'Unusual Data Access Pattern',
-          description: 'Data access rate significantly higher than normal',
-          source_event: event,
-          indicators: ['data_access_anomaly'],
-          affected_resources: [event.resource_id || 'unknown'],
-          recommended_actions: ['investigate_user_activity', 'review_access_logs'],
-          created_at: new Date(),
-          escalated: false,
-          auto_mitigated: false,
-        });
+      if (recentAccess.length > 0) {
+        const avgAccess =
+          recentAccess.reduce((sum, m) => sum + m.data_access_events_last_hour, 0) /
+          recentAccess.length;
+        const lastAccess = recentAccess[recentAccess.length - 1];
+
+        if (lastAccess && lastAccess.data_access_events_last_hour > avgAccess * 3) {
+          alerts.push({
+            id: crypto.randomUUID(),
+            alert_type: 'anomaly_detected',
+            severity: 'medium',
+            title: 'Unusual Data Access Pattern',
+            description: 'Data access rate significantly higher than normal',
+            source_event: event,
+            indicators: ['data_access_anomaly'],
+            affected_resources: [event.resource_id || 'unknown'],
+            recommended_actions: ['investigate_user_activity', 'review_access_logs'],
+            created_at: new Date(),
+            escalated: false,
+            auto_mitigated: false,
+          });
+        }
       }
     }
 

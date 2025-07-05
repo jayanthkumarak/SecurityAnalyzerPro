@@ -7,7 +7,7 @@ export interface SecurityError {
   severity: 'low' | 'medium' | 'high' | 'critical';
   message: string;
   sanitized_message: string;
-  stack_trace?: string;
+  stack_trace: string;
   context: {
     user_id?: string;
     session_id?: string;
@@ -66,6 +66,14 @@ export class SecurityAwareErrorHandler {
     // Generate mitigation actions
     const mitigationActions = this.generateMitigationActions(errorType, severity, threatIndicators);
     
+    const errorContext: SecurityError['context'] = {};
+    if (context.user_id) errorContext.user_id = context.user_id;
+    if (context.session_id) errorContext.session_id = context.session_id;
+    if (operationContext?.resource_type) errorContext.resource_type = operationContext.resource_type;
+    if (operationContext?.resource_id) errorContext.resource_id = operationContext.resource_id;
+    if (operationContext?.operation) errorContext.operation = operationContext.operation;
+    if (context.ip_address) errorContext.ip_address = context.ip_address;
+
     const securityError: SecurityError = {
       id: errorId,
       error_type: errorType,
@@ -73,14 +81,7 @@ export class SecurityAwareErrorHandler {
       message: error.message,
       sanitized_message: sanitizedMessage,
       stack_trace: this.sanitizeStackTrace(error.stack),
-      context: {
-        user_id: context.user_id,
-        session_id: context.session_id,
-        resource_type: operationContext?.resource_type,
-        resource_id: operationContext?.resource_id,
-        operation: operationContext?.operation,
-        ip_address: context.ip_address,
-      },
+      context: errorContext,
       threat_indicators: threatIndicators,
       mitigation_actions: mitigationActions,
       correlation_id: correlationId,
@@ -216,8 +217,8 @@ export class SecurityAwareErrorHandler {
     return sanitized;
   }
 
-  private sanitizeStackTrace(stackTrace?: string): string | undefined {
-    if (!stackTrace) return undefined;
+  private sanitizeStackTrace(stackTrace?: string): string {
+    if (!stackTrace) return '';
     
     // Remove sensitive file paths from stack trace
     let sanitized = stackTrace;
@@ -229,7 +230,7 @@ export class SecurityAwareErrorHandler {
 
   private classifyError(
     error: Error,
-    operationContext?: { resource_type?: string; operation?: string }
+    _operationContext?: { resource_type?: string; operation?: string }
   ): SecurityError['error_type'] {
     const message = error.message.toLowerCase();
     
@@ -298,7 +299,7 @@ export class SecurityAwareErrorHandler {
   private analyzeThreatIndicators(
     error: Error,
     context: Partial<SecurityContext>,
-    operationContext?: { resource_type?: string; operation?: string }
+    _operationContext?: { resource_type?: string; operation?: string }
   ): string[] {
     const indicators: string[] = [];
     const message = error.message.toLowerCase();

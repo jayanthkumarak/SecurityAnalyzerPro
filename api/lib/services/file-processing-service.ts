@@ -2,7 +2,6 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { app } from 'electron';
-import { SecurityManager } from '../security/security-manager';
 import { DatabaseManager } from '../database/database-manager';
 import {
   Evidence,
@@ -14,12 +13,10 @@ import {
 } from '../database/types';
 
 export class FileProcessingService {
-  private securityManager: SecurityManager;
   private databaseManager: DatabaseManager;
   private evidenceStorageDir: string;
 
-  constructor(securityManager: SecurityManager, databaseManager: DatabaseManager) {
-    this.securityManager = securityManager;
+  constructor(databaseManager: DatabaseManager) {
     this.databaseManager = databaseManager;
     this.evidenceStorageDir = path.join(app.getPath('userData'), 'evidence');
   }
@@ -96,7 +93,7 @@ export class FileProcessingService {
 
       // Detect file type from magic numbers
       const fileType = this.detectFileType(headerBuffer);
-      const mimeType = this.getMimeType(fileType, path.extname(filePath));
+      const mimeType = this.getMimeType(fileType);
       const fileSignature = this.getFileSignature(headerBuffer);
 
       // Security checks
@@ -193,7 +190,7 @@ export class FileProcessingService {
     return 'unknown';
   }
 
-  private getMimeType(fileType: EvidenceType, extension: string): string {
+  private getMimeType(fileType: EvidenceType): string {
     const mimeTypes: Record<EvidenceType, string> = {
       prefetch: 'application/octet-stream',
       evtx: 'application/x-ms-evtx',
@@ -210,7 +207,7 @@ export class FileProcessingService {
     return headerBuffer.subarray(0, 16).toString('hex').toUpperCase();
   }
 
-  private async getFileSignatureFromPath(filePath: string): string {
+  private async getFileSignatureFromPath(filePath: string): Promise<string> {
     const fileHandle = await fs.open(filePath, 'r');
     const headerBuffer = Buffer.alloc(16);
     await fileHandle.read(headerBuffer, 0, 16, 0);
@@ -361,8 +358,8 @@ export class FileProcessingService {
 
   private async updateEvidenceWithFileDetails(
     evidenceId: string,
-    metadata: FileMetadata,
-    storageLocation: string
+    _metadata: FileMetadata,
+    _storageLocation: string
   ): Promise<void> {
     // This would update the evidence record with computed hashes and storage location
     // Implementation would depend on having an update method in DatabaseManager

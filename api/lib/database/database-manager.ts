@@ -7,16 +7,12 @@ import { SecurityManager } from '../security/security-manager';
 import {
   Case,
   Evidence,
-  AnalysisResult,
   AuditEvent,
   CreateCaseRequest,
   CreateEvidenceRequest,
   CaseFilters,
-  EvidenceFilters,
   OperationContext,
-  DatabaseOperation,
   RetentionPolicy,
-  PurgeCandidate,
 } from './types';
 
 export class DatabaseManager {
@@ -348,7 +344,7 @@ export class DatabaseManager {
       this.retentionPolicies.get('security_incident')!;
 
     const retentionExpires = this.calculateRetentionExpiry(retentionPolicy.retention_period);
-    const custodyChain = JSON.stringify([
+    const custodyChain = [
       {
         from_user: 'system',
         to_user: context.user_id || 'unknown',
@@ -357,26 +353,30 @@ export class DatabaseManager {
         location: 'system',
         signature_hash: crypto.randomBytes(32).toString('hex'),
       },
-    ]);
+    ];
 
-    const caseData: Partial<Case> = {
+    const recordToInsert = {
+      id,
       case_number: request.case_number,
       title: request.title,
-      description: request.description,
+      description: request.description ?? null,
       case_type: request.case_type,
       priority: request.priority,
       classification: request.classification,
-      investigator_id: request.investigator_id,
-      incident_date: request.incident_date,
+      investigator_id: request.investigator_id ?? null,
+      incident_date: request.incident_date?.toISOString() ?? null,
       retention_class: request.case_type,
-      legal_hold: retentionPolicy.legal_hold_default,
-      retention_expires: retentionExpires,
-      auto_purge_eligible: retentionPolicy.auto_purge_allowed,
-      purge_approval_required: retentionPolicy.approval_required,
-      custody_chain: JSON.parse(custodyChain),
+      legal_hold: retentionPolicy.legal_hold_default ? 1 : 0,
+      retention_expires: retentionExpires.toISOString(),
+      auto_purge_eligible: retentionPolicy.auto_purge_allowed ? 1 : 0,
+      purge_approval_required: retentionPolicy.approval_required ? 1 : 0,
+      custody_chain: JSON.stringify(custodyChain),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      status: 'active',
     };
-
-    const integrityHash = this.calculateIntegrityHash(caseData);
+    
+    const integrityHash = this.calculateIntegrityHash(recordToInsert);
 
     const stmt = this.primaryDB.prepare(`
       INSERT INTO cases (
@@ -384,30 +384,15 @@ export class DatabaseManager {
         investigator_id, incident_date, retention_class, legal_hold,
         retention_expires, auto_purge_eligible, purge_approval_required,
         custody_chain, integrity_hash, created_at, updated_at, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (
+        @id, @case_number, @title, @description, @case_type, @priority, @classification,
+        @investigator_id, @incident_date, @retention_class, @legal_hold,
+        @retention_expires, @auto_purge_eligible, @purge_approval_required,
+        @custody_chain, @integrity_hash, @created_at, @updated_at, @status
+      )
     `);
 
-    stmt.run(
-      id,
-      request.case_number,
-      request.title,
-      request.description,
-      request.case_type,
-      request.priority,
-      request.classification,
-      request.investigator_id,
-      request.incident_date?.toISOString(),
-      request.case_type,
-      retentionPolicy.legal_hold_default ? 1 : 0,
-      retentionExpires.toISOString(),
-      retentionPolicy.auto_purge_allowed ? 1 : 0,
-      retentionPolicy.approval_required ? 1 : 0,
-      custodyChain,
-      integrityHash,
-      now.toISOString(),
-      now.toISOString(),
-      'active'
-    );
+    stmt.run({ ...recordToInsert, integrity_hash: integrityHash });
 
     // Log case creation
     await this.logAuditEvent(
@@ -428,11 +413,11 @@ export class DatabaseManager {
     if (!this.primaryDB) throw new Error('Database not initialized');
 
     const stmt = this.primaryDB.prepare('SELECT * FROM cases WHERE id = ?');
-    const row = stmt.get(id) as any;
+    const row = stmt.get(id);
 
     if (!row) return null;
 
-    return this.mapRowToCase(row);
+    return this.mapRowToCase(row as Record<string, any>);
   }
 
   async getCases(filters?: CaseFilters): Promise<Case[]> {
@@ -468,7 +453,7 @@ export class DatabaseManager {
     query += ' ORDER BY created_at DESC';
 
     const stmt = this.primaryDB.prepare(query);
-    const rows = stmt.all(...params) as any[];
+    const rows = stmt.all(...params) as Record<string, any>[];
 
     return rows.map(row => this.mapRowToCase(row));
   }
@@ -526,11 +511,11 @@ export class DatabaseManager {
     if (!this.primaryDB) throw new Error('Database not initialized');
 
     const stmt = this.primaryDB.prepare('SELECT * FROM evidence WHERE id = ?');
-    const row = stmt.get(id) as any;
+    const row = stmt.get(id);
 
     if (!row) return null;
 
-    return this.mapRowToEvidence(row);
+    return this.mapRowToEvidence(row as Record<string, any>);
   }
 
   async getEvidenceByCase(caseId: string): Promise<Evidence[]> {
@@ -539,7 +524,7 @@ export class DatabaseManager {
     const stmt = this.primaryDB.prepare(
       'SELECT * FROM evidence WHERE case_id = ? ORDER BY evidence_number'
     );
-    const rows = stmt.all(caseId) as any[];
+    const rows = stmt.all(caseId) as Record<string, any>[];
 
     return rows.map(row => this.mapRowToEvidence(row));
   }
@@ -648,71 +633,71 @@ export class DatabaseManager {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
-  private mapRowToCase(row: any): Case {
+  private mapRowToCase(row: Record<string, any>): Case {
     return {
-      id: row.id,
-      case_number: row.case_number,
-      title: row.title,
-      description: row.description,
-      case_type: row.case_type,
-      priority: row.priority,
-      status: row.status,
-      organization: row.organization,
-      investigator_id: row.investigator_id,
-      supervisor_id: row.supervisor_id,
-      department: row.department,
-      legal_hold: Boolean(row.legal_hold),
-      retention_class: row.retention_class,
-      classification: row.classification,
-      incident_date: row.incident_date ? new Date(row.incident_date) : undefined,
-      created_at: new Date(row.created_at),
-      updated_at: new Date(row.updated_at),
-      closed_at: row.closed_at ? new Date(row.closed_at) : undefined,
-      archived_at: row.archived_at ? new Date(row.archived_at) : undefined,
-      retention_expires: row.retention_expires ? new Date(row.retention_expires) : undefined,
-      auto_purge_eligible: Boolean(row.auto_purge_eligible),
-      purge_approval_required: Boolean(row.purge_approval_required),
-      custody_chain: row.custody_chain ? JSON.parse(row.custody_chain) : [],
-      integrity_hash: row.integrity_hash,
-    };
+      id: row['id'],
+      case_number: row['case_number'],
+      title: row['title'],
+      description: row['description'] ?? undefined,
+      case_type: row['case_type'],
+      priority: row['priority'],
+      status: row['status'],
+      organization: row['organization'] ?? undefined,
+      investigator_id: row['investigator_id'] ?? undefined,
+      supervisor_id: row['supervisor_id'] ?? undefined,
+      department: row['department'] ?? undefined,
+      legal_hold: Boolean(row['legal_hold']),
+      retention_class: row['retention_class'],
+      classification: row['classification'],
+      incident_date: row['incident_date'] ? new Date(row['incident_date']) : undefined,
+      created_at: new Date(row['created_at']),
+      updated_at: new Date(row['updated_at']),
+      closed_at: row['closed_at'] ? new Date(row['closed_at']) : undefined,
+      archived_at: row['archived_at'] ? new Date(row['archived_at']) : undefined,
+      retention_expires: row['retention_expires'] ? new Date(row['retention_expires']) : undefined,
+      auto_purge_eligible: Boolean(row['auto_purge_eligible']),
+      purge_approval_required: Boolean(row['purge_approval_required']),
+      custody_chain: row['custody_chain'] ? JSON.parse(row['custody_chain']) : [],
+      integrity_hash: row['integrity_hash'],
+    } as any as Case;
   }
 
-  private mapRowToEvidence(row: any): Evidence {
+  private mapRowToEvidence(row: Record<string, any>): Evidence {
     return {
-      id: row.id,
-      case_id: row.case_id,
-      evidence_number: row.evidence_number,
-      original_filename: row.original_filename,
-      original_path: row.original_path,
-      file_hash_md5: row.file_hash_md5 || '',
-      file_hash_sha256: row.file_hash_sha256 || '',
-      file_hash_sha512: row.file_hash_sha512,
-      file_signature: row.file_signature || '',
-      file_size: row.file_size || 0,
-      file_type: row.file_type,
-      mime_type: row.mime_type,
-      file_extension: row.file_extension || '',
-      acquisition_method: row.acquisition_method,
-      acquisition_tool: row.acquisition_tool,
-      acquisition_hash: row.acquisition_hash || '',
-      chain_of_custody: row.chain_of_custody ? JSON.parse(row.chain_of_custody) : [],
-      storage_location: row.storage_location || '',
-      storage_method: row.storage_method || 'encrypted_file',
-      compression_method: row.compression_method,
-      encryption_key_id: row.encryption_key_id || '',
-      created_at: new Date(row.created_at),
-      modified_at: new Date(row.modified_at),
-      accessed_at: new Date(row.accessed_at),
-      processing_status: row.processing_status || 'pending',
-      analysis_status: row.analysis_status || 'pending',
-      verification_status: row.verification_status || 'pending',
-      retention_class: row.retention_class || 'evidence',
-      auto_purge_eligible: Boolean(row.auto_purge_eligible),
-      backup_status: row.backup_status || 'pending',
-      parent_evidence_id: row.parent_evidence_id,
-      related_evidence_ids: row.related_evidence_ids ? JSON.parse(row.related_evidence_ids) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    };
+      id: row['id'],
+      case_id: row['case_id'],
+      evidence_number: row['evidence_number'],
+      original_filename: row['original_filename'],
+      original_path: row['original_path'],
+      file_hash_md5: row['file_hash_md5'] || '',
+      file_hash_sha256: row['file_hash_sha256'] || '',
+      file_hash_sha512: row['file_hash_sha512'] ?? undefined,
+      file_signature: row['file_signature'] || '',
+      file_size: row['file_size'] || 0,
+      file_type: row['file_type'],
+      mime_type: row['mime_type'] ?? undefined,
+      file_extension: row['file_extension'] || '',
+      acquisition_method: row['acquisition_method'],
+      acquisition_tool: row['acquisition_tool'] ?? undefined,
+      acquisition_hash: row['acquisition_hash'] || '',
+      chain_of_custody: row['chain_of_custody'] ? JSON.parse(row['chain_of_custody']) : [],
+      storage_location: row['storage_location'] || '',
+      storage_method: row['storage_method'] || 'encrypted_file',
+      compression_method: row['compression_method'] ?? undefined,
+      encryption_key_id: row['encryption_key_id'] || '',
+      created_at: new Date(row['created_at']),
+      modified_at: new Date(row['modified_at']),
+      accessed_at: new Date(row['accessed_at']),
+      processing_status: row['processing_status'] || 'pending',
+      analysis_status: row['analysis_status'] || 'pending',
+      verification_status: row['verification_status'] || 'pending',
+      retention_class: row['retention_class'] || 'evidence',
+      auto_purge_eligible: Boolean(row['auto_purge_eligible']),
+      backup_status: row['backup_status'] || 'pending',
+      parent_evidence_id: row['parent_evidence_id'] ?? undefined,
+      related_evidence_ids: row['related_evidence_ids'] ? JSON.parse(row['related_evidence_ids']) : [],
+      metadata: row['metadata'] ? JSON.parse(row['metadata']) : {},
+    } as any as Evidence;
   }
 
   async close(): Promise<void> {
@@ -732,7 +717,7 @@ export class DatabaseManager {
     }
 
     // Close all case databases
-    for (const [caseId, db] of this.caseDBs) {
+    for (const db of this.caseDBs.values()) {
       db.close();
     }
     this.caseDBs.clear();

@@ -24,14 +24,13 @@ export class SecurityManager {
   private static readonly ALGORITHM = 'aes-256-gcm';
   private static readonly KEY_LENGTH = 32;
   private static readonly SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
-  private static readonly MAX_FAILED_ATTEMPTS = 5;
   
   private encryptionKey: Buffer | null = null;
   private keyFilePath: string;
   private activeSessions: Map<string, SessionData> = new Map();
   private securityPolicies: Map<string, SecurityPolicy> = new Map();
   private securityIncidents: SecurityIncident[] = [];
-  private sessionCleanupTimer: NodeJS.Timer | null = null;
+  private sessionCleanupTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this.keyFilePath = path.join(app.getPath('userData'), 'security', 'master.key');
@@ -80,7 +79,11 @@ export class SecurityManager {
     }
 
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(SecurityManager.ALGORITHM, this.encryptionKey, iv);
+    const cipher = crypto.createCipheriv(
+      SecurityManager.ALGORITHM,
+      this.encryptionKey,
+      iv
+    ) as crypto.CipherGCM;
     cipher.setAAD(Buffer.from('SecurityAnalyzer'));
 
     let encrypted = cipher.update(data, 'utf8', 'hex');
@@ -102,7 +105,11 @@ export class SecurityManager {
     }
 
     const iv = Buffer.from(encryptedData.iv, 'hex');
-    const decipher = crypto.createDecipheriv(encryptedData.algorithm, this.encryptionKey, iv);
+    const decipher = crypto.createDecipheriv(
+      encryptedData.algorithm,
+      this.encryptionKey,
+      iv
+    ) as crypto.DecipherGCM;
 
     decipher.setAAD(Buffer.from('SecurityAnalyzer'));
     decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
@@ -316,6 +323,7 @@ export class SecurityManager {
         resource_type: resource,
         details: { operation, reason: 'No policy defined' },
         threat_indicators: ['missing_policy'],
+        mitigation_actions: ['policy_review'],
       });
       return false;
     }
@@ -330,6 +338,7 @@ export class SecurityManager {
         resource_type: resource,
         details: { operation, required_level: policy.minimum_security_level, user_level: context.security_level },
         threat_indicators: ['insufficient_security_level'],
+        mitigation_actions: ['escalate_to_admin'],
       });
       return false;
     }
@@ -345,6 +354,7 @@ export class SecurityManager {
         resource_type: resource,
         details: { operation, required_permissions: policy.required_permissions, user_permissions: context.permissions },
         threat_indicators: ['insufficient_permissions'],
+        mitigation_actions: ['access_review'],
       });
       return false;
     }
@@ -360,6 +370,7 @@ export class SecurityManager {
         resource_type: resource,
         details: { operation, required_roles: policy.required_roles, user_roles: context.roles },
         threat_indicators: ['insufficient_roles'],
+        mitigation_actions: ['role_assignment_review'],
       });
       return false;
     }
@@ -372,7 +383,6 @@ export class SecurityManager {
     const securityIncident: SecurityIncident = {
       id: crypto.randomUUID(),
       ...incident,
-      mitigation_actions: [],
       status: 'open',
       created_at: new Date(),
       updated_at: new Date(),
@@ -475,6 +485,16 @@ export class SecurityManager {
       approval_required: false,
     });
 
+    this.securityPolicies.set('audit:create', {
+      resource_type: 'audit',
+      operation: 'create',
+      required_permissions: [], // System-level action, no specific permission needed
+      minimum_security_level: 'low',
+      required_roles: ['admin', 'investigator', 'analyst', 'viewer', 'auditor'],
+      audit_required: false, // Prevents recursive audit loops
+      approval_required: false,
+    });
+
     this.securityPolicies.set('audit:export', {
       resource_type: 'audit',
       operation: 'export',
@@ -492,36 +512,34 @@ export class SecurityManager {
     roles.forEach(role => {
       switch (role) {
         case 'admin':
-          permissions.push(...[
+          permissions.push(...([
             'case:create', 'case:read', 'case:update', 'case:delete',
             'evidence:create', 'evidence:read', 'evidence:update', 'evidence:delete',
             'analysis:create', 'analysis:read', 'analysis:update', 'analysis:delete',
             'audit:read', 'audit:export', 'system:configure', 'user:manage'
-          ]);
+          ] as Permission[]));
           break;
         case 'investigator':
-          permissions.push(...[
+          permissions.push(...([
             'case:create', 'case:read', 'case:update',
             'evidence:create', 'evidence:read', 'evidence:update',
             'analysis:create', 'analysis:read', 'analysis:update'
-          ]);
+          ] as Permission[]));
           break;
         case 'analyst':
-          permissions.push(...[
+          permissions.push(...([
             'case:read', 'evidence:read',
             'analysis:create', 'analysis:read', 'analysis:update'
-          ]);
+          ] as Permission[]));
           break;
         case 'auditor':
-          permissions.push(...[
+          permissions.push(...([
             'case:read', 'evidence:read', 'analysis:read',
             'audit:read', 'audit:export'
-          ]);
+          ] as Permission[]));
           break;
         case 'viewer':
-          permissions.push(...[
-            'case:read', 'evidence:read', 'analysis:read'
-          ]);
+          permissions.push(...(['case:read', 'evidence:read', 'analysis:read'] as Permission[]));
           break;
       }
     });

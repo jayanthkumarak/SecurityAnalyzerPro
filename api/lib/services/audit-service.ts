@@ -68,8 +68,7 @@ export class AuditService {
   private errorHandler: SecurityAwareErrorHandler;
   private config: AuditConfiguration;
   private auditChain: Map<string, string> = new Map(); // event_id -> previous_hash
-  private realTimeMonitoringActive = false;
-  private monitoringTimer: NodeJS.Timer | null = null;
+  private monitoringTimer: NodeJS.Timeout | null = null;
 
   constructor(
     databaseManager: DatabaseManager,
@@ -115,28 +114,34 @@ export class AuditService {
         throw new Error('Insufficient permissions to create audit events');
       }
 
+      const event_id = crypto.randomUUID();
+      const correlation_id = crypto.randomUUID();
+
       // Create comprehensive audit event
-      const auditEvent: Partial<AuditEvent> = {
-        event_id: crypto.randomUUID(),
+      const auditEvent: AuditEvent = {
+        id: this.securityManager.generateSecureRandomId(),
+        event_id,
         event_type: event.event_type || 'security_event',
         action: event.action || 'unknown',
-        resource_type: event.resource_type,
-        resource_id: event.resource_id,
-        user_id: context.user_id,
-        session_id: context.session_id,
-        ip_address: context.ip_address,
-        user_agent: context.user_agent,
+        ...event.resource_type && { resource_type: event.resource_type },
+        ...event.resource_id && { resource_id: event.resource_id },
+        ...context.user_id && { user_id: context.user_id },
+        ...context.session_id && { session_id: context.session_id },
+        ...context.ip_address && { ip_address: context.ip_address },
+        ...context.user_agent && { user_agent: context.user_agent },
         event_details: {
           ...event.event_details,
           security_level: context.security_level,
           user_roles: context.roles,
           authentication_method: context.authentication_method,
         },
-        correlation_id: crypto.randomUUID(),
+        correlation_id,
         legal_hold_applicable: this.isLegalHoldApplicable(event),
         retention_required: true,
         compliance_flags: this.generateComplianceFlags(event),
         event_timestamp: new Date(),
+        recorded_timestamp: new Date(),
+        event_hash: '', // will be calculated next
       };
 
       // Calculate audit chain hash
@@ -150,17 +155,17 @@ export class AuditService {
       const operationContext: OperationContext = {
         user_id: context.user_id,
         session_id: context.session_id,
-        ip_address: context.ip_address,
-        user_agent: context.user_agent,
-        correlation_id: auditEvent.correlation_id,
         operation_type: 'audit_logging',
         resource_type: 'audit_event',
+        ...context.ip_address && { ip_address: context.ip_address },
+        ...context.user_agent && { user_agent: context.user_agent },
+        ...auditEvent.correlation_id && { correlation_id: auditEvent.correlation_id },
       };
 
       await this.databaseManager.logAuditEvent(auditEvent, operationContext);
       
       // Update audit chain
-      this.auditChain.set(auditEvent.event_id!, eventHash);
+      this.auditChain.set(auditEvent.event_id, eventHash);
       this.auditChain.set('latest', eventHash);
 
       // Check for real-time alerts
@@ -209,7 +214,7 @@ export class AuditService {
       
       // Verify audit trail integrity
       const auditTrailIntegrity = await this.verifyAuditTrailIntegrity();
-      const chainOfCustodyIntact = await this.verifyChainOfCustody(periodStart, periodEnd);
+      const chainOfCustodyIntact = await this.verifyChainOfCustody();
 
       const report: ComplianceReport = {
         id: reportId,
@@ -259,8 +264,8 @@ export class AuditService {
   }
 
   async exportAuditTrail(
-    startDate: Date,
-    endDate: Date,
+    _startDate: Date,
+    _endDate: Date,
     format: 'json' | 'csv' | 'xml',
     context: SecurityContext
   ): Promise<string> {
@@ -277,7 +282,7 @@ export class AuditService {
       }
 
       // Get audit events for the period
-      const events = await this.getAuditEventsByPeriod(startDate, endDate);
+      const events = await this.getAuditEventsByPeriod(_startDate, _endDate);
       
       // Log the export action
       await this.logSecurityEvent({
@@ -285,8 +290,8 @@ export class AuditService {
         action: 'export_audit_trail',
         resource_type: 'audit_trail',
         event_details: {
-          period_start: startDate,
-          period_end: endDate,
+          period_start: _startDate,
+          period_end: _endDate,
           format,
           event_count: events.length,
         },
@@ -331,26 +336,26 @@ export class AuditService {
     };
   }
 
-  private async getAuditEventsByPeriod(startDate: Date, endDate: Date): Promise<AuditEvent[]> {
+  private async getAuditEventsByPeriod(_startDate: Date, _endDate: Date): Promise<AuditEvent[]> {
     // This would query the actual audit database
     // For now, return empty array as placeholder
     return [];
   }
 
-  private async getSecurityIncidentsByPeriod(startDate: Date, endDate: Date): Promise<SecurityIncident[]> {
+  private getSecurityIncidentsByPeriod(startDate: Date, endDate: Date): SecurityIncident[] {
     return this.securityManager.getSecurityIncidents().filter(
       incident => incident.created_at >= startDate && incident.created_at <= endDate
     );
   }
 
-  private calculateSummaryStatistics(events: AuditEvent[], incidents: SecurityIncident[]) {
+  private calculateSummaryStatistics(events: AuditEvent[], incidents: SecurityIncident[]): ComplianceReport['summary'] {
     return {
       total_events: events.length,
       security_incidents: incidents.length,
       compliance_violations: incidents.filter(i => i.incident_type === 'policy_violation').length,
       data_access_events: events.filter(e => e.event_type === 'data_access').length,
       administrative_actions: events.filter(e => e.event_type === 'administrative').length,
-      failed_operations: events.filter(e => e.event_details.success === false).length,
+      failed_operations: events.filter(e => e.event_details['success'] === false).length,
     };
   }
 
@@ -369,7 +374,7 @@ export class AuditService {
     }, {} as Record<string, number>);
   }
 
-  private calculateSecurityMetrics(events: AuditEvent[], incidents: SecurityIncident[]) {
+  private calculateSecurityMetrics(_events: AuditEvent[], incidents: SecurityIncident[]): ComplianceReport['security_metrics'] {
     return {
       authentication_failures: incidents.filter(i => i.incident_type === 'authentication_failure').length,
       authorization_violations: incidents.filter(i => i.incident_type === 'authorization_violation').length,
@@ -378,7 +383,7 @@ export class AuditService {
     };
   }
 
-  private async assessComplianceStatus(events: AuditEvent[], incidents: SecurityIncident[]) {
+  private async assessComplianceStatus(_events: AuditEvent[], incidents: SecurityIncident[]): Promise<ComplianceReport['compliance_status']> {
     const violations: string[] = [];
     
     // Check for compliance violations
@@ -396,12 +401,12 @@ export class AuditService {
       gdpr_compliant: dataBreaches.length === 0,
       sox_compliant: violations.length === 0,
       nist_compliant: true, // Would implement actual NIST compliance checks
-      iso27037_compliant: await this.verifyChainOfCustody(new Date(Date.now() - 24*60*60*1000), new Date()),
+      iso27037_compliant: await this.verifyChainOfCustody(),
       violations,
     };
   }
 
-  private generateRecommendations(events: AuditEvent[], incidents: SecurityIncident[], complianceStatus: any): string[] {
+  private generateRecommendations(_events: AuditEvent[], incidents: SecurityIncident[], complianceStatus: ComplianceReport['compliance_status']): string[] {
     const recommendations: string[] = [];
     
     if (incidents.length > 0) {
@@ -419,7 +424,7 @@ export class AuditService {
     return recommendations;
   }
 
-  private async verifyChainOfCustody(startDate: Date, endDate: Date): Promise<boolean> {
+  private async verifyChainOfCustody(): Promise<boolean> {
     // This would implement actual chain of custody verification
     // For now, return true as placeholder
     return true;
@@ -433,16 +438,18 @@ export class AuditService {
       user_id: event.user_id,
       resource_type: event.resource_type,
       resource_id: event.resource_id,
-      event_timestamp: event.event_timestamp,
+      event_timestamp: event.event_timestamp?.toISOString(),
       event_details: event.event_details,
     };
-    
-    const sortedKeys = Object.keys(eventData).sort();
+
+    const sortedKeys = Object.keys(eventData).sort() as (keyof typeof eventData)[];
     const sortedEventData: any = {};
-    sortedKeys.forEach(key => {
-      sortedEventData[key] = (eventData as any)[key];
-    });
-    
+    for (const key of sortedKeys) {
+      if (eventData[key] !== undefined) {
+        sortedEventData[key] = eventData[key];
+      }
+    }
+
     const hashData = JSON.stringify(sortedEventData);
     return crypto.createHash('sha256').update(hashData).digest('hex');
   }
@@ -471,7 +478,6 @@ export class AuditService {
   }
 
   private startRealTimeMonitoring(): void {
-    this.realTimeMonitoringActive = true;
     this.monitoringTimer = setInterval(async () => {
       try {
         await this.performRealTimeAnalysis();
@@ -493,13 +499,15 @@ export class AuditService {
   }
 
   private formatAsCSV(events: AuditEvent[]): string {
-    if (events.length === 0) return '';
+    if (!events || events.length === 0) {
+      return '';
+    }
     
-    const headers = Object.keys(events[0]).join(',');
-    const rows = events.map(event => 
-      Object.values(event).map(value => 
-        typeof value === 'object' ? JSON.stringify(value) : String(value)
-      ).join(',')
+    const headers = Object.keys(events[0]!).join(',');
+    const rows = events.map(event =>
+      Object.values(event)
+        .map(value => (typeof value === 'object' ? JSON.stringify(value) : String(value)))
+        .join(',')
     );
     
     return [headers, ...rows].join('\\n');
@@ -530,9 +538,8 @@ export class AuditService {
   }
 
   async shutdown(): Promise<void> {
-    this.realTimeMonitoringActive = false;
     if (this.monitoringTimer) {
-      clearInterval(this.monitoringTimer as NodeJS.Timeout);
+      clearInterval(this.monitoringTimer);
       this.monitoringTimer = null;
     }
   }
