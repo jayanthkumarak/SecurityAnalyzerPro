@@ -29,25 +29,16 @@
     "node": ">=18.0.0",
     "bun": ">=1.0.0"
   },
-  "scripts": {
-    "dev": "concurrently \"bun run dev:api\" \"bun run dev:web\"",
-    "dev:web": "bun --cwd web run dev",
-    "dev:api": "bun --cwd api run dev",
-    "build": "bun run build:api && bun run build:web",
-    "build:web": "bun --cwd web run build",
-    "build:api": "bun --cwd api run build",
-    "start": "concurrently \"bun run start:api\" \"bun run start:web\"",
-    "start:web": "bun --cwd web run preview",
-    "start:api": "bun --cwd api run start",
-    "test": "bun --cwd web run test && bun --cwd api run test",
-    "lint": "bun --cwd web run lint && bun --cwd api run lint",
-    "clean": "rm -rf web/dist api/dist web/node_modules api/node_modules node_modules"
-  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
-  "workspaces": [
-    "web",
-    "api"
-  ]
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c green,cyan \"bun run --cwd api dev\" \"bun run --cwd web dev\"",
+    "build": "bun run --cwd api build && bun run --cwd web build",
+    "preview": "concurrently -k -n API,WEB -c green,cyan \"bun run --cwd api start\" \"bun run --cwd web preview\"",
+    "lint": "eslint \"{api,web}/**/*.{ts,tsx}\"",
+    "test": "bun test",
+    "clean": "rm -rf api/dist web/dist"
+  },
+  "workspaces": ["api", "web"]
 }

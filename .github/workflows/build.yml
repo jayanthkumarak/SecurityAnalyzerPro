@@ -9,4 +9,4 @@ jobs:
       - run: bun install             # or npm ci
       - run: bun run lint            # eslint must pass
       - run: bun run build           # webpack => dist
-      - run: bun test                # jest + smoke 
+      - run: bun run test            # jest + smoke 

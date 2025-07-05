@@ -58,6 +58,11 @@ bun run build
 bun run start
 ```
 
+## Quick start (dev)
+
+bun install        # installs root + api + web deps
+bun run dev        # starts API on :4000 and Web on :5173
+
 ## 📁 Project Structure
 
 ```
