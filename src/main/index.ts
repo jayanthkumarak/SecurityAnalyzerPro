@@ -5,6 +5,8 @@ import { DatabaseManager } from './database/database-manager';
 import { FileProcessingService } from './services/file-processing-service';
 import { ClaudeAnalysisService } from './services/claude-analysis-service';
 import { ConfigManager } from './config/config-manager';
+import { OperationContext } from './database/types';
+import * as crypto from 'crypto';
 
 class SecurityAnalyzerApp {
   private windowManager: WindowManager;
@@ -17,9 +19,12 @@ class SecurityAnalyzerApp {
   constructor() {
     this.configManager = new ConfigManager();
     this.securityManager = new SecurityManager();
-    this.databaseManager = new DatabaseManager();
+    this.databaseManager = new DatabaseManager(this.securityManager);
     this.windowManager = new WindowManager();
-    this.fileProcessingService = new FileProcessingService();
+    this.fileProcessingService = new FileProcessingService(
+      this.securityManager,
+      this.databaseManager
+    );
     this.claudeService = new ClaudeAnalysisService(this.configManager);
 
     this.initializeApp();
@@ -53,9 +58,10 @@ class SecurityAnalyzerApp {
 
   private async onReady(): Promise<void> {
     try {
-      // Initialize core services
-      await this.databaseManager.initialize();
+      // Initialize core services in correct order
       await this.securityManager.initialize();
+      await this.databaseManager.initialize();
+      await this.fileProcessingService.initialize();
 
       // Create main window
       await this.windowManager.createMainWindow();
@@ -90,11 +96,21 @@ class SecurityAnalyzerApp {
 
   private setupIpcHandlers(): void {
     // File processing handlers
-    ipcMain.handle('process-file', async (_, filePath: string) => {
+    ipcMain.handle('process-file', async (event, filePath: string, caseId: string) => {
       try {
-        return await this.fileProcessingService.processFile(filePath);
+        const context = this.createOperationContext(event, 'file_processing', 'process_file');
+        return await this.fileProcessingService.processFile(filePath, caseId, context);
       } catch (error) {
         console.error('File processing error:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('validate-file', async (_, filePath: string) => {
+      try {
+        return await this.fileProcessingService.validateFile(filePath);
+      } catch (error) {
+        console.error('File validation error:', error);
         throw error;
       }
     });
@@ -109,18 +125,67 @@ class SecurityAnalyzerApp {
     });
 
     // Database handlers
-    ipcMain.handle('create-case', async (_, caseData) => {
+    ipcMain.handle('create-case', async (event, caseData) => {
       try {
-        return await this.databaseManager.createCase(caseData);
+        const context = this.createOperationContext(event, 'case_management', 'create_case');
+        return await this.databaseManager.createCase(caseData, context);
       } catch (error) {
         console.error('Database error:', error);
         throw error;
       }
     });
 
-    ipcMain.handle('get-cases', async () => {
+    ipcMain.handle('get-cases', async (event, filters?) => {
       try {
-        return await this.databaseManager.getCases();
+        const context = this.createOperationContext(event, 'case_management', 'get_cases');
+        await this.databaseManager.logAuditEvent(
+          {
+            event_type: 'data_access',
+            action: 'list_cases',
+            resource_type: 'case',
+            event_details: { filters },
+          },
+          context
+        );
+        return await this.databaseManager.getCases(filters);
+      } catch (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('get-case-by-id', async (event, caseId: string) => {
+      try {
+        const context = this.createOperationContext(event, 'case_management', 'get_case');
+        await this.databaseManager.logAuditEvent(
+          {
+            event_type: 'data_access',
+            action: 'get_case',
+            resource_type: 'case',
+            resource_id: caseId,
+          },
+          context
+        );
+        return await this.databaseManager.getCaseById(caseId);
+      } catch (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('get-evidence-by-case', async (event, caseId: string) => {
+      try {
+        const context = this.createOperationContext(event, 'evidence_management', 'get_evidence');
+        await this.databaseManager.logAuditEvent(
+          {
+            event_type: 'data_access',
+            action: 'list_evidence',
+            resource_type: 'evidence',
+            event_details: { case_id: caseId },
+          },
+          context
+        );
+        return await this.databaseManager.getEvidenceByCase(caseId);
       } catch (error) {
         console.error('Database error:', error);
         throw error;
@@ -167,6 +232,22 @@ class SecurityAnalyzerApp {
         throw error;
       }
     });
+  }
+
+  private createOperationContext(
+    event: Electron.IpcMainInvokeEvent,
+    operationType: string,
+    action: string
+  ): OperationContext {
+    return {
+      user_id: 'system_user', // TODO: Add proper user authentication
+      session_id: crypto.randomBytes(16).toString('hex'),
+      ip_address: event.sender.getURL().includes('localhost') ? '127.0.0.1' : 'unknown',
+      user_agent: event.sender.getUserAgent(),
+      correlation_id: crypto.randomUUID(),
+      operation_type: operationType,
+      resource_type: action,
+    };
   }
 }
 

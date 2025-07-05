@@ -61,7 +61,7 @@ export class SecurityManager {
     }
 
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipherGCM(SecurityManager.ALGORITHM, this.encryptionKey, iv);
+    const cipher = crypto.createCipheriv(SecurityManager.ALGORITHM, this.encryptionKey, iv);
     cipher.setAAD(Buffer.from('SecurityAnalyzer'));
 
     let encrypted = cipher.update(data, 'utf8', 'hex');
@@ -83,7 +83,7 @@ export class SecurityManager {
     }
 
     const iv = Buffer.from(encryptedData.iv, 'hex');
-    const decipher = crypto.createDecipherGCM(encryptedData.algorithm, this.encryptionKey, iv);
+    const decipher = crypto.createDecipheriv(encryptedData.algorithm, this.encryptionKey, iv);
 
     decipher.setAAD(Buffer.from('SecurityAnalyzer'));
     decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
