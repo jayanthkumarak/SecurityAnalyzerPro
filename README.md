@@ -1,150 +1,134 @@
-# SecurityAnalyzer Pro
+# ForensicAnalyzerPro Web
 
-A next-generation digital forensics platform that combines AI-powered analysis with comprehensive threat intelligence to transform how security professionals investigate incidents and understand attack patterns.
+AI-powered digital forensics platform with a modern web interface. Upload digital artifacts and get comprehensive forensic analysis reports powered by artificial intelligence.
 
-## About
+## 🌟 Features
 
-SecurityAnalyzer Pro was born from real-world forensic investigations where traditional analysis methods proved insufficient for the complexity of modern cyber threats. Our platform leverages Anthropic's Claude AI to provide expert-level forensic analysis while integrating seamlessly with the MITRE ATT&CK framework to deliver actionable threat intelligence.
+- **AI-Powered Analysis**: Advanced forensic analysis using Claude AI
+- **Modern Web Interface**: Clean, responsive React-based UI
+- **File Upload & Processing**: Support for various digital artifact formats
+- **Markdown Reports**: Detailed forensic reports in markdown format
+- **RESTful API**: Fastify-based backend for scalable processing
 
-The platform addresses a critical gap in the forensics ecosystem: the need for intelligent analysis that can process vast amounts of evidence, correlate patterns across multiple data sources, and translate technical findings into business-ready security assessments. By combining local processing for sensitive data with cloud-based AI for advanced analysis, we've created a solution that maintains enterprise security standards while delivering unprecedented analytical capabilities.
+## 🏗️ Architecture
 
-## Key Features
+This is a modern web application with:
 
-**AI-Powered Forensic Analysis**
-Our integration with Claude AI transforms raw forensic artifacts into comprehensive security insights. The platform can analyze prefetch files, event logs, registry hives, and network traffic to identify attack patterns, timeline correlations, and behavioral anomalies that would take human analysts hours or days to discover.
+- **Frontend**: React + Vite + TypeScript + Tailwind CSS
+- **Backend**: Fastify + TypeScript + Node.js
+- **Package Manager**: Bun (fast JavaScript runtime & package manager)
+- **CI/CD**: GitHub Actions
 
-**MITRE ATT&CK Integration**
-Every piece of evidence is automatically mapped to relevant MITRE ATT&CK techniques, providing immediate context about potential threats. The platform maintains up-to-date threat intelligence feeds and can correlate findings with known APT groups, malware families, and campaign indicators.
-
-**Privacy-First Architecture**
-Sensitive forensic data never leaves your environment. Our local processing engine handles all data parsing and sanitization before sending anonymized summaries to AI services. All local data is encrypted with AES-256 and stored in secure SQLite databases with comprehensive audit trails.
-
-**Professional Reporting**
-Generate executive-ready security assessments with technical depth appropriate for your audience. Reports include timeline visualizations, threat actor correlations, risk assessments, and actionable recommendations for incident response and remediation.
-
-## Technical Architecture
-
-SecurityAnalyzer Pro is built on a modern Electron foundation with React for the user interface and TypeScript throughout for type safety and maintainability. The architecture prioritizes security, performance, and extensibility:
-
-```
-Application Layer (React + TypeScript)
-├── Investigation Dashboard
-├── Evidence Processing Interface  
-├── MITRE ATT&CK Visualization
-└── Report Generation
-
-Processing Layer (Electron Main)
-├── Forensic File Parsers
-├── Data Sanitization Engine
-├── Claude AI Integration
-└── Security & Encryption
-
-Data Layer (SQLite + File System)
-├── Encrypted Evidence Storage
-├── Analysis Results Cache
-├── Case Management Database
-└── Audit Logging
-```
-
-The platform processes forensic artifacts locally using specialized parsers for various file formats including Windows Prefetch files, Event Logs (EVTX), Registry hives, and network packet captures. After parsing and sanitization, anonymized data summaries are sent to Claude AI for analysis, ensuring that sensitive information remains secure while benefiting from advanced AI capabilities.
-
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-SecurityAnalyzer Pro requires Node.js 18 or higher and a valid Claude API key from Anthropic. The platform is compatible with Windows 10/11, macOS 10.15+, and modern Linux distributions.
+- [Bun](https://bun.sh/) >= 1.0.0
+- Node.js >= 18.0.0
 
 ### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/jayanthkumarak/SecurityAnalyzerPro.git
 cd SecurityAnalyzerPro
-npm install
+
+# Install dependencies
+bun install
 ```
 
-### Configuration
-
-Create a `.env` file in the project root with your Claude API key:
-
-```
-CLAUDE_API_KEY=your_api_key_here
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
-```
-
-### Running the Application
+### Development
 
 ```bash
-# Development mode
-npm run dev
+# Start both web and API servers
+bun run dev
 
-# Build for production
-npm run build
-
-# Run tests
-npm test
+# Or start individually:
+bun run dev:web   # Web app on http://localhost:3001
+bun run dev:api   # API server on http://localhost:4000
 ```
 
-## Usage
+### Production Build
 
-**Evidence Processing**
-Drag and drop forensic artifacts into the application interface. The platform automatically detects file types and applies appropriate parsers. Supported formats include Windows Prefetch files, Event Logs, Registry exports, memory dumps, and network packet captures.
+```bash
+# Build both applications
+bun run build
 
-**AI Analysis**
-Once evidence is processed, initiate AI analysis to identify patterns, correlate events, and map findings to MITRE ATT&CK techniques. The analysis engine provides confidence scores for each finding and highlights potential false positives.
-
-**Threat Intelligence**
-Review automated correlations with known threat actors, malware families, and campaign indicators. The platform maintains connections to multiple threat intelligence feeds and can identify IOCs, TTPs, and attribution markers.
-
-**Report Generation**
-Generate comprehensive reports tailored to your audience, from technical incident response teams to executive leadership. Reports include timeline visualizations, risk assessments, and actionable recommendations.
-
-## Security Considerations
-
-SecurityAnalyzer Pro implements defense-in-depth security principles throughout the platform:
-
-**Data Protection**
-All sensitive forensic data is encrypted at rest using AES-256-GCM encryption. The platform never transmits raw forensic artifacts to external services, instead using a sophisticated sanitization engine to create anonymized summaries suitable for AI analysis.
-
-**API Security**
-Claude API interactions include the `x-no-training` header to ensure that your data is never used for model training. All API communications use TLS 1.3 with certificate pinning for additional security.
-
-**Audit Logging**
-Comprehensive audit trails track all user actions, data access, and system events without logging sensitive forensic content. Logs are tamper-evident and can be exported for compliance requirements.
-
-## Development
-
-The codebase follows strict TypeScript conventions with comprehensive test coverage. We use ESLint for code quality, Prettier for formatting, and Jest for testing. The project structure separates concerns between the main Electron process, renderer process, and shared utilities.
-
-**Project Structure**
-```
-src/
-├── main/           # Electron main process
-├── renderer/       # React frontend
-├── shared/         # Shared types and utilities
-├── parsers/        # Forensic file parsers
-└── security/       # Encryption and security modules
+# Start production servers
+bun run start
 ```
 
-**Contributing**
-We welcome contributions from the security community. Please review our contributing guidelines and ensure all code passes our security and quality checks before submitting pull requests.
+## 📁 Project Structure
 
-## Compliance & Standards
+```
+ForensicAnalyzerPro/
+├── web/                 # React frontend application
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.ts
+├── api/                 # Fastify backend API
+│   ├── lib/
+│   ├── index.ts
+│   └── package.json
+├── .github/             # CI/CD workflows
+├── package.json         # Root package.json (monorepo)
+└── README.md
+```
 
-SecurityAnalyzer Pro is designed to meet enterprise security and compliance requirements:
+## 🛠️ Available Scripts
 
-- **GDPR/CCPA**: Right to deletion, data portability, and privacy by design
-- **SOX**: Comprehensive audit trails and data integrity controls
-- **NIST 800-86**: Computer forensics best practices and evidence handling
-- **ISO 27037**: Digital evidence identification, collection, and preservation
+- `bun run dev` - Start development servers (web + API)
+- `bun run build` - Build both applications
+- `bun run start` - Start production servers
+- `bun run test` - Run tests
+- `bun run lint` - Run linting
+- `bun run clean` - Clean build artifacts and dependencies
 
-## Support
+## 🔧 Configuration
 
-For technical support, feature requests, or security concerns, please use our GitHub Issues tracker or contact our development team directly. We maintain active support channels and provide comprehensive documentation to help you get the most from the platform.
+### Environment Variables
 
-## License
+Create `.env` files in the respective directories:
 
-Licensed under the MIT License. See LICENSE file for details.
+**api/.env**:
+```
+ANTHROPIC_API_KEY=your_claude_api_key_here
+PORT=4000
+```
 
----
+**web/.env**:
+```
+VITE_API_URL=http://localhost:4000
+```
 
-SecurityAnalyzer Pro represents the next evolution in digital forensics, combining the analytical power of AI with the rigor of traditional forensic methods to help security professionals stay ahead of evolving threats.
+## 📊 Usage
+
+1. Open your browser to `http://localhost:3001`
+2. Click "Choose file" to select a digital artifact
+3. Click "Analyze" to process the file
+4. View the AI-generated forensic analysis report
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👨‍💻 Author
+
+**Jayanth Kumar**
+- GitHub: [@jayanthkumarak](https://github.com/jayanthkumarak)
+- Email: jayanthkumarak@gmail.com
+
+## 🙏 Acknowledgments
+
+- Powered by [Claude AI](https://www.anthropic.com/claude) for intelligent analysis
+- Built with [React](https://reactjs.org/) and [Fastify](https://www.fastify.io/)
+- UI inspired by [Perplexity.ai](https://perplexity.ai/)

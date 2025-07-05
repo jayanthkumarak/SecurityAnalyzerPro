@@ -1,9 +1,0 @@
-node_modules/
-dist/
-release/
-*.lock
-*.log
-*.d.ts
-.env*
-*.min.js
-*.min.css
