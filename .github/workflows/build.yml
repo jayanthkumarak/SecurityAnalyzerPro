@@ -1,0 +1,12 @@
+name: Build & Smoke-Test
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1   # or node-setup
+      - run: bun install             # or npm ci
+      - run: bun run lint            # eslint must pass
+      - run: bun run build           # webpack => dist
+      - run: bun test                # jest + smoke 
