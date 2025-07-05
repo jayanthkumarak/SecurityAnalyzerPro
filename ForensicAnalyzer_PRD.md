@@ -2,10 +2,11 @@
 ## ForensicAnalyzer Pro - AI-Powered Digital Forensics Platform
 
 ### Document Information
-- **Version:** 1.0
+- **Version:** 1.1
 - **Date:** July 4, 2025
 - **Author:** Security Engineering Team
 - **Project Type:** Cross-Platform Desktop Application (Windows & macOS)
+- **Current Release:** V0.1 (Foundation) | **Next Release:** V0.2 (Hybrid AI)
 
 ---
 
@@ -15,10 +16,12 @@ ForensicAnalyzer Pro is an AI-powered digital forensics analysis platform that p
 
 ### Key Value Propositions
 - **Automated Analysis:** AI-driven analysis of forensic artifacts with human-level intelligence
+- **Hybrid AI Architecture:** Cloud and local AI models for maximum availability (V0.2)
 - **Visual Investigation:** Rich, interactive interface for exploring forensic evidence
 - **Professional Reporting:** Generate executive-ready security analysis reports
 - **Cross-Platform:** Native applications for both Windows and macOS
 - **Enterprise Security:** Private data processing with no AI training on user data
+- **Offline Capability:** Full analysis capability without internet connectivity (V0.2)
 
 ---
 
@@ -160,6 +163,86 @@ Current forensic tools require extensive manual analysis and lack AI-powered ins
 
 ---
 
+## Product Roadmap & Versioning
+
+### V0.1 - Foundation Release (Current - July 2025)
+**Status:** In Development | **Target:** 4 weeks
+
+#### Core Deliverables:
+- **Project Infrastructure:** Complete development environment and toolchain
+- **Basic Electron Application:** Working cross-platform application framework
+- **File Processing Engine:** Support for Windows Prefetch files and basic Event Logs
+- **Claude AI Integration:** Secure API integration with forensic analysis capabilities
+- **Basic UI Framework:** Drag-and-drop interface and results display
+- **Security Foundation:** AES-256 encryption and secure data handling
+
+#### Success Criteria:
+- Successfully analyze real Windows prefetch files
+- Generate basic AI-powered forensic analysis reports
+- Demonstrate secure data processing workflow
+- Cross-platform compatibility (Windows & macOS)
+
+### V0.2 - Hybrid AI & Offline Capability (Planned - August 2025)
+**Status:** Designed | **Target:** 4 weeks after V0.1
+
+#### Major Features:
+- **Hybrid AI Architecture:** Intelligent fallback between cloud and local AI models
+- **Local AI Integration:** Bundled Ollama with Llama 3.1 8B and Phi-3 Mini models
+- **Offline Analysis Capability:** Complete forensic analysis without internet connectivity
+- **Air-Gapped Environment Support:** Designed for isolated enterprise networks
+- **Enhanced Performance:** Optimized analysis workflows with local model acceleration
+
+#### Technical Specifications:
+```typescript
+// Hybrid AI Service Architecture
+interface HybridAICapabilities {
+  cloudAnalysis: {
+    provider: 'Claude 3.5 Sonnet',
+    capabilities: 'Advanced reasoning, MITRE mapping, complex correlation',
+    requirements: 'Internet connectivity'
+  };
+  localAnalysis: {
+    models: ['Llama 3.1 8B', 'Phi-3 Mini'],
+    capabilities: 'Basic analysis, pattern recognition, timeline correlation',
+    requirements: '8-16GB RAM, 20GB storage'
+  };
+  fallbackStrategy: 'Automatic service selection based on availability and analysis complexity';
+}
+```
+
+#### Enterprise Benefits:
+- **Regulatory Compliance:** Meet air-gapped environment requirements
+- **Business Continuity:** Analysis continues during network outages
+- **Cost Optimization:** Reduce API costs for routine analysis tasks
+- **Performance:** Instant basic analysis with local models
+- **Data Sovereignty:** Complete local processing option for sensitive investigations
+
+#### Installation & Deployment:
+- **Automatic Model Installation:** Ollama and default models bundled with installer
+- **Resource-Aware Deployment:** Intelligent model selection based on system capabilities
+- **Offline-First Design:** All features functional without internet connectivity
+- **Cloud Enhancement:** Online models provide enhanced analysis when available
+
+### V0.3 - MITRE ATT&CK Integration (Planned - September 2025)
+**Status:** Specification Phase | **Target:** 4 weeks after V0.2
+
+#### Core Features:
+- Interactive MITRE ATT&CK matrix visualization
+- Automated technique mapping from evidence
+- Threat actor and campaign correlation
+- Enhanced threat intelligence integration
+
+### V0.4 - Advanced Analytics (Planned - October 2025)
+**Status:** Research Phase | **Target:** 4 weeks after V0.3
+
+#### Planned Features:
+- Timeline analysis and visualization
+- Professional report generation with custom branding
+- Case management and collaboration tools
+- Extended file format support (Registry, Memory dumps, Network traffic)
+
+---
+
 ## User Experience Design
 
 ### Target Users & Personas
@@ -205,18 +288,24 @@ Current forensic tools require extensive manual analysis and lack AI-powered ins
 
 ### System Requirements
 
-#### Minimum Requirements:
+#### V0.1 - Cloud-Only Requirements:
 - **OS:** Windows 10/11 (x64) or macOS 11+
 - **RAM:** 8GB (16GB recommended)
 - **Storage:** 500GB available space
-- **Network:** Broadband internet connection
+- **Network:** Broadband internet connection (required for Claude API)
 - **Display:** 1920x1080 resolution
 
-#### Recommended Requirements:
+#### V0.2 - Hybrid AI Requirements:
+- **RAM:** 16GB (32GB recommended for local AI models)
+- **Storage:** 1TB SSD (20GB additional for local AI models)
+- **Network:** Broadband internet connection (optional for offline mode)
+- **GPU:** Dedicated graphics recommended for visualization and local AI acceleration
+
+#### Recommended Configuration:
 - **RAM:** 32GB
 - **Storage:** 1TB SSD
 - **Display:** 4K resolution with color accuracy
-- **GPU:** Dedicated graphics for visualization
+- **GPU:** NVIDIA RTX 4060 or equivalent (for local AI acceleration)
 
 ### Technology Stack
 
@@ -233,10 +322,12 @@ Current forensic tools require extensive manual analysis and lack AI-powered ins
 - **Security:** Keytar for credential storage
 
 #### AI Integration:
-- **Provider:** Anthropic Claude API
+- **V0.1 Cloud Provider:** Anthropic Claude API (3.5 Sonnet)
+- **V0.2 Local Models:** Ollama with Llama 3.1 8B, Phi-3 Mini
+- **Hybrid Architecture:** Intelligent fallback and service selection
 - **Configuration:** Enterprise tier with no-training option
-- **Error Handling:** Retry logic with exponential backoff
-- **Caching:** Intelligent response caching
+- **Error Handling:** Retry logic with exponential backoff and graceful degradation
+- **Caching:** Intelligent response caching and offline result storage
 
 ### Security Architecture
 - **Local-First:** All sensitive data processed locally
@@ -273,6 +364,42 @@ interface ClaudeConfig {
 - **Data Minimization:** Send only necessary context
 - **Local Processing:** Sensitive data stays on device
 - **User Consent:** Clear opt-in for AI features
+
+### Local AI Integration (V0.2)
+
+#### Ollama Local Model Service
+```typescript
+interface LocalAIConfig {
+  models: {
+    primary: 'llama3.1:8b-instruct';
+    lightweight: 'phi3:mini';
+    specialized: 'codellama:7b-code';
+  };
+  deployment: {
+    autoInstall: true;
+    resourceOptimization: true;
+    offlineCapable: true;
+  };
+  fallbackStrategy: 'claude-preferred' | 'local-preferred' | 'automatic';
+}
+```
+
+#### Key Capabilities:
+1. **Offline Analysis:** Complete forensic analysis without internet connectivity
+2. **Air-Gapped Support:** Designed for isolated enterprise networks
+3. **Resource Optimization:** Intelligent model selection based on system capabilities
+4. **Privacy Enhancement:** 100% local processing option for sensitive investigations
+
+#### Model Performance Comparison:
+- **Claude 3.5 Sonnet:** Advanced reasoning, complex correlation, MITRE mapping
+- **Llama 3.1 8B:** Good general analysis, pattern recognition, timeline correlation
+- **Phi-3 Mini:** Basic analysis, lightweight processing, resource-constrained environments
+
+#### Deployment Requirements:
+- **Automatic Installation:** Ollama and models bundled with application installer
+- **System Detection:** Automatic hardware capability assessment
+- **Progressive Enhancement:** Cloud models enhance local analysis when available
+- **Fallback Logic:** Seamless transition between AI services based on availability
 
 ### Third-Party Integrations
 
@@ -336,7 +463,8 @@ interface ClaudeConfig {
 
 ### Technical Risks
 1. **API Reliability:** Claude API outages or rate limiting
-   - **Mitigation:** Caching, graceful degradation, multiple providers
+   - **V0.1 Mitigation:** Caching, graceful degradation, retry logic
+   - **V0.2 Mitigation:** Hybrid AI architecture with local model fallback
 2. **Performance:** Large artifact processing speed
    - **Mitigation:** Streaming, chunking, background processing
 3. **Cross-Platform:** Consistent experience across OS
@@ -356,7 +484,8 @@ interface ClaudeConfig {
 2. **Regulatory Changes:** New compliance requirements
    - **Mitigation:** Flexible architecture, compliance by design
 3. **AI Provider Changes:** Claude API terms or pricing
-   - **Mitigation:** Multi-provider support, vendor diversification
+   - **V0.1 Mitigation:** Multi-provider support, vendor diversification
+   - **V0.2 Mitigation:** Local AI models provide complete independence from cloud providers
 
 ---
 
