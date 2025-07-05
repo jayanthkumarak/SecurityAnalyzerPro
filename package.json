@@ -61,6 +61,8 @@
     "@anthropic-ai/sdk": "^0.24.3",
     "@headlessui/react": "^1.7.18",
     "@heroicons/react": "^2.0.18",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
     "@tanstack/react-query": "^5.28.9",
     "better-sqlite3": "^9.4.3",
     "crypto-js": "^4.2.0",
@@ -133,7 +135,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -141,7 +146,10 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -149,7 +157,10 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },

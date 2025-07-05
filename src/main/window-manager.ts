@@ -54,7 +54,7 @@ export class WindowManager {
     // Load the application
     if (process.env['NODE_ENV'] === 'development') {
       // Development: Load from webpack dev server
-      await this.mainWindow.loadURL('http://localhost:3000');
+      await this.mainWindow.loadURL('http://localhost:3001');
       
       // Open DevTools in development
       this.mainWindow.webContents.openDevTools();
@@ -123,8 +123,8 @@ export class WindowManager {
       },
     });
 
-    if (process.env.NODE_ENV === 'development') {
-      await analysisWindow.loadURL('http://localhost:3000#/analysis');
+    if (process.env['NODE_ENV'] === 'development') {
+      await analysisWindow.loadURL('http://localhost:3001#/analysis');
     } else {
       await analysisWindow.loadFile(join(__dirname, '../renderer/index.html'), {
         hash: 'analysis'
@@ -155,8 +155,8 @@ export class WindowManager {
       },
     });
 
-    if (process.env.NODE_ENV === 'development') {
-      await reportWindow.loadURL('http://localhost:3000#/report');
+    if (process.env['NODE_ENV'] === 'development') {
+      await reportWindow.loadURL('http://localhost:3001#/report');
     } else {
       await reportWindow.loadFile(join(__dirname, '../renderer/index.html'), {
         hash: 'report'

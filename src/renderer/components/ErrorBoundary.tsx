@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -81,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 </div>
               </div>
 
-              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+              {process.env['NODE_ENV'] === 'development' && this.state.errorInfo && (
                 <div className="mb-6">
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Stack Trace:
@@ -115,7 +115,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   Try Again
                 </button>
 
-                {process.env.NODE_ENV === 'development' && (
+                {process.env['NODE_ENV'] === 'development' && (
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(

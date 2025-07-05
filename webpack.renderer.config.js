@@ -52,7 +52,7 @@ module.exports = {
   
   output: {
     path: path.resolve(__dirname, 'dist/renderer'),
-    filename: 'bundle.js',
+    filename: '[name].bundle.js',
     publicPath: './',
   },
   
@@ -70,7 +70,7 @@ module.exports = {
   ],
   
   devServer: {
-    port: 3000,
+    port: 3001,
     hot: true,
     compress: true,
     historyApiFallback: true,

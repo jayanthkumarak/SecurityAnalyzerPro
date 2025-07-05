@@ -10,7 +10,10 @@
       "Bash(git commit:*)",
       "Bash(npm install)",
       "Bash(npx webpack:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run dev:browser:*)",
+      "Bash(npm install:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

@@ -34,7 +34,8 @@ export const App: React.FC = () => {
         }
 
         // Test basic connectivity
-        await window.electronAPI.getConfig('appVersion');
+        const version = await window.electronAPI.getConfig('appVersion');
+        console.log('✅ App initialized successfully, version:', version);
 
         setIsInitialized(true);
       } catch (error) {
