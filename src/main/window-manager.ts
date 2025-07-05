@@ -1,5 +1,6 @@
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, screen, app } from 'electron';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null;
@@ -11,6 +12,18 @@ export class WindowManager {
     // Calculate optimal window size (80% of screen, minimum 1200x800)
     const windowWidth = Math.max(Math.floor(width * 0.8), 1200);
     const windowHeight = Math.max(Math.floor(height * 0.8), 800);
+
+    // Determine the correct preload path
+    const preloadPath = app.isPackaged
+      ? join(__dirname, 'preload.js')  // after build, __dirname === dist/main
+      : join(__dirname, 'preload.js'); // during dev, webpack outputs to dist/main
+
+    // Safety check: ensure preload script exists
+    if (!existsSync(preloadPath)) {
+      throw new Error(`Preload script missing at ${preloadPath}. Current __dirname: ${__dirname}`);
+    }
+
+    console.log(`✅ Preload script found at: ${preloadPath}`);
 
     this.mainWindow = new BrowserWindow({
       width: windowWidth,
@@ -31,7 +44,7 @@ export class WindowManager {
         experimentalFeatures: false,
 
         // Preload script for secure IPC
-        preload: join(__dirname, 'preload.js'),
+        preload: preloadPath,
 
         // Additional security
         webSecurity: true,
@@ -50,6 +63,26 @@ export class WindowManager {
     this.mainWindow.webContents.setWindowOpenHandler(() => {
       return { action: 'deny' };
     });
+
+    // Set Content Security Policy
+    if (process.env['NODE_ENV'] === 'development') {
+      // Development CSP - more permissive for hot reload
+      this.mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Content-Security-Policy': [
+              "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:*; " +
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              "img-src 'self' data: http://localhost:*; " +
+              "font-src 'self' data:; " +
+              "connect-src 'self' http://localhost:* ws://localhost:* https://api.anthropic.com;"
+            ]
+          }
+        });
+      });
+    }
 
     // Load the application
     if (process.env['NODE_ENV'] === 'development') {
@@ -93,7 +126,7 @@ export class WindowManager {
     return this.mainWindow;
   }
 
-  private getAppIcon(): string | undefined {
+  private getAppIcon(): string {
     // Return platform-specific icon paths
     if (process.platform === 'win32') {
       return join(__dirname, '../../assets/icon.ico');
@@ -105,12 +138,21 @@ export class WindowManager {
   }
 
   async createAnalysisWindow(): Promise<BrowserWindow> {
+    // Use the same preload path logic
+    const preloadPath = app.isPackaged
+      ? join(__dirname, 'preload.js')
+      : join(__dirname, 'preload.js');
+
+    if (!existsSync(preloadPath)) {
+      throw new Error(`Preload script missing at ${preloadPath}`);
+    }
+
     const analysisWindow = new BrowserWindow({
       width: 1000,
       height: 700,
       minWidth: 800,
       minHeight: 600,
-      parent: this.mainWindow || undefined,
+      ...(this.mainWindow && { parent: this.mainWindow }),
       modal: false,
       show: false,
       title: 'Analysis Details - SecurityAnalyzer Pro',
@@ -118,8 +160,7 @@ export class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
-        preload: join(__dirname, 'preload.js'),
+        preload: preloadPath,
       },
     });
 
@@ -139,6 +180,15 @@ export class WindowManager {
   }
 
   async createReportWindow(): Promise<BrowserWindow> {
+    // Use the same preload path logic
+    const preloadPath = app.isPackaged
+      ? join(__dirname, 'preload.js')
+      : join(__dirname, 'preload.js');
+
+    if (!existsSync(preloadPath)) {
+      throw new Error(`Preload script missing at ${preloadPath}`);
+    }
+
     const reportWindow = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -150,8 +200,7 @@ export class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
-        preload: join(__dirname, 'preload.js'),
+        preload: preloadPath,
       },
     });
 

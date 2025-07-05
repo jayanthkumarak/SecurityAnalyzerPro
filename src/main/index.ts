@@ -7,9 +7,20 @@ import { DatabaseManager } from './database/database-manager';
 import { FileProcessingService } from './services/file-processing-service';
 import { ClaudeAnalysisService } from './services/claude-analysis-service';
 import { AuditService } from './services/audit-service';
-import { ConfigManager } from './config/config-manager';
+import { ConfigManager, Schema } from './config/config-manager';
 import { OperationContext, SecurityContext } from './database/types';
 import * as crypto from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
+
+const isPackaged = app.isPackaged;
+const preloadPath = isPackaged
+  ? path.join(__dirname, 'preload.js')
+  : path.join(__dirname, '..', 'src', 'main', 'preload.ts');
+
+if (!fs.existsSync(preloadPath)) {
+  throw new Error(`Preload script missing at ${preloadPath}`);
+}
 
 class SecurityAnalyzerApp {
   private windowManager: WindowManager;
@@ -30,11 +41,8 @@ class SecurityAnalyzerApp {
     this.auditService = new AuditService(this.databaseManager, this.securityManager, this.errorHandler);
     this.securityMonitor = new SecurityEventMonitor(this.securityManager, this.errorHandler, this.auditService);
     this.windowManager = new WindowManager();
-    this.fileProcessingService = new FileProcessingService(
-      this.securityManager,
-      this.databaseManager
-    );
-    this.claudeService = new ClaudeAnalysisService(this.configManager);
+    this.fileProcessingService = new FileProcessingService(this.databaseManager);
+    this.claudeService = new ClaudeAnalysisService();
 
     this.initializeApp();
     this.setupSecurityEventHandlers();
@@ -188,7 +196,7 @@ class SecurityAnalyzerApp {
           event_type: 'ai_analysis',
           action: 'analyze_artifact',
           resource_type: 'analysis',
-          event_details: { artifact_type: analysisRequest.type },
+          event_details: { artifact_type: (analysisRequest as any).type },
         }, securityContext);
 
         return result;
@@ -313,22 +321,49 @@ class SecurityAnalyzerApp {
     // Configuration handlers
     ipcMain.handle('get-config', async (_, key: string) => {
       try {
-        return this.configManager.get(key);
+        if (this.isValidConfigKey(key)) {
+          return this.configManager.get(key);
+        }
+        throw new Error(`Invalid configuration key: ${key}`);
       } catch (error) {
         console.error('Config error:', error);
         throw error;
       }
     });
 
+    // App version handler (for backward compatibility)
+    ipcMain.handle('get-app-version', async () => {
+      try {
+        return this.configManager.get('appVersion') || '0.1.0';
+      } catch (error) {
+        console.error('Error getting app version:', error);
+        return '0.1.0';
+      }
+    });
+
     ipcMain.handle('set-config', async (_, key: string, value: any) => {
       try {
-        this.configManager.set(key, value);
-        return true;
+        if (this.isValidConfigKey(key)) {
+          this.configManager.set(key, value);
+          return true;
+        }
+        throw new Error(`Invalid configuration key: ${key}`);
       } catch (error) {
         console.error('Config error:', error);
         throw error;
       }
     });
+  }
+
+  private isValidConfigKey(key: string): key is keyof Schema {
+    const schemaKeys: (keyof Schema)[] = [
+      'claudeApiKey',
+      'analysisDepth',
+      'encryptionEnabled',
+      'auditLogging',
+      'appVersion',
+    ];
+    return schemaKeys.includes(key as keyof Schema);
   }
 
   private createOperationContext(
