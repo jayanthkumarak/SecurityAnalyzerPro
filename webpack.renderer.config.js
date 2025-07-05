@@ -1,6 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const webpack = require('webpack');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
@@ -48,12 +49,15 @@ module.exports = {
       '@renderer': path.resolve(__dirname, 'src/renderer'),
       '@shared': path.resolve(__dirname, 'src/shared'),
     },
+    fallback: {
+      // Add fallbacks for Node.js core modules here if needed
+    },
   },
   
   output: {
     path: path.resolve(__dirname, 'dist/renderer'),
     filename: '[name].bundle.js',
-    publicPath: './',
+    publicPath: isDevelopment ? '/' : './',
   },
   
   plugins: [
@@ -67,6 +71,11 @@ module.exports = {
         filename: 'styles.css',
       }),
     ]),
+    new webpack.ProvidePlugin({
+      process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
+      global: 'globalThis',
+    }),
   ],
   
   devServer: {
@@ -74,12 +83,6 @@ module.exports = {
     hot: true,
     compress: true,
     historyApiFallback: true,
-    static: {
-      directory: path.join(__dirname, 'dist/renderer'),
-    },
-    headers: {
-      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://api.anthropic.com;",
-    },
   },
   
   optimization: {

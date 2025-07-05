@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Error caught by boundary:', error);
     console.error('Error info:', errorInfo);
 
@@ -38,7 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  render() {
+  public override render() {
     if (this.state.hasError) {
       return (
         <div className='min-h-screen bg-gray-900 text-white flex items-center justify-center p-4'>

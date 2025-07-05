@@ -1,10 +1,18 @@
 import Store from 'electron-store';
 
+export type Schema = {
+  claudeApiKey: string;
+  analysisDepth: 'standard' | 'deep';
+  encryptionEnabled: boolean;
+  auditLogging: boolean;
+  appVersion: string;
+};
+
 export class ConfigManager {
-  private store: Store;
+  private store: Store<Schema>;
 
   constructor() {
-    this.store = new Store({
+    this.store = new Store<Schema>({
       name: 'security-analyzer-config',
       defaults: {
         claudeApiKey: '',
@@ -16,19 +24,19 @@ export class ConfigManager {
     });
   }
 
-  get(key: string): any {
+  get<K extends keyof Schema>(key: K): Schema[K] {
     return this.store.get(key);
   }
 
-  set(key: string, value: any): void {
+  set<K extends keyof Schema>(key: K, value: Schema[K]): void {
     this.store.set(key, value);
   }
 
-  has(key: string): boolean {
+  has(key: keyof Schema): boolean {
     return this.store.has(key);
   }
 
-  delete(key: string): void {
+  delete(key: keyof Schema): void {
     this.store.delete(key);
   }
 
@@ -36,7 +44,7 @@ export class ConfigManager {
     this.store.clear();
   }
 
-  getAll(): Record<string, any> {
+  getAll(): Schema {
     return this.store.store;
   }
 }

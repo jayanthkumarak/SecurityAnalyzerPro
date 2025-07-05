@@ -21,9 +21,6 @@ interface SecurityAnalyzerAPI {
   // Event subscriptions
   subscribeToAnalysis: (analysisId: string, callback: (update: any) => void) => () => void;
 
-  // Utility
-  getAppVersion: () => Promise<string>;
-
   // Security
   validateFile: (filePath: string) => Promise<boolean>;
 }
@@ -63,9 +60,6 @@ const api: SecurityAnalyzerAPI = {
       ipcRenderer.removeListener('analysis-update', handler);
     };
   },
-
-  // Utility functions
-  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Security validation
   validateFile: (filePath: string) => ipcRenderer.invoke('validate-file', filePath),
