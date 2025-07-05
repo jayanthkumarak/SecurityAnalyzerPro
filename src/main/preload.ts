@@ -6,24 +6,24 @@ interface SecurityAnalyzerAPI {
   processFile: (filePath: string) => Promise<any>;
   showOpenDialog: (options: any) => Promise<any>;
   showSaveDialog: (options: any) => Promise<any>;
-  
+
   // Analysis
   analyzeArtifact: (analysisRequest: any) => Promise<any>;
-  
+
   // Database operations
   createCase: (caseData: any) => Promise<any>;
   getCases: () => Promise<any>;
-  
+
   // Configuration
   getConfig: (key: string) => Promise<any>;
   setConfig: (key: string, value: any) => Promise<boolean>;
-  
+
   // Event subscriptions
   subscribeToAnalysis: (analysisId: string, callback: (update: any) => void) => () => void;
-  
+
   // Utility
   getAppVersion: () => Promise<string>;
-  
+
   // Security
   validateFile: (filePath: string) => Promise<boolean>;
 }
@@ -35,18 +35,19 @@ const api: SecurityAnalyzerAPI = {
   processFile: (filePath: string) => ipcRenderer.invoke('process-file', filePath),
   showOpenDialog: (options: any) => ipcRenderer.invoke('show-open-dialog', options),
   showSaveDialog: (options: any) => ipcRenderer.invoke('show-save-dialog', options),
-  
+
   // Analysis
-  analyzeArtifact: (analysisRequest: any) => ipcRenderer.invoke('analyze-artifact', analysisRequest),
-  
+  analyzeArtifact: (analysisRequest: any) =>
+    ipcRenderer.invoke('analyze-artifact', analysisRequest),
+
   // Database operations
   createCase: (caseData: any) => ipcRenderer.invoke('create-case', caseData),
   getCases: () => ipcRenderer.invoke('get-cases'),
-  
+
   // Configuration
   getConfig: (key: string) => ipcRenderer.invoke('get-config', key),
   setConfig: (key: string, value: any) => ipcRenderer.invoke('set-config', key, value),
-  
+
   // Event subscriptions for real-time updates
   subscribeToAnalysis: (analysisId: string, callback: (update: any) => void) => {
     const handler = (_: any, update: any) => {
@@ -54,18 +55,18 @@ const api: SecurityAnalyzerAPI = {
         callback(update);
       }
     };
-    
+
     ipcRenderer.on('analysis-update', handler);
-    
+
     // Return unsubscribe function
     return () => {
       ipcRenderer.removeListener('analysis-update', handler);
     };
   },
-  
+
   // Utility functions
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  
+
   // Security validation
   validateFile: (filePath: string) => ipcRenderer.invoke('validate-file', filePath),
 };

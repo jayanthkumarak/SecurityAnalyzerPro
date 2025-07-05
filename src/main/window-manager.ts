@@ -22,17 +22,17 @@ export class WindowManager {
       title: 'SecurityAnalyzer Pro',
       titleBarStyle: 'default',
       icon: this.getAppIcon(),
-      
+
       webPreferences: {
         // Security configuration
         nodeIntegration: false,
         contextIsolation: true,
         allowRunningInsecureContent: false,
         experimentalFeatures: false,
-        
+
         // Preload script for secure IPC
         preload: join(__dirname, 'preload.js'),
-        
+
         // Additional security
         webSecurity: true,
         sandbox: false, // We need access to Node.js APIs in preload
@@ -55,7 +55,7 @@ export class WindowManager {
     if (process.env['NODE_ENV'] === 'development') {
       // Development: Load from webpack dev server
       await this.mainWindow.loadURL('http://localhost:3001');
-      
+
       // Open DevTools in development
       this.mainWindow.webContents.openDevTools();
     } else {
@@ -67,7 +67,7 @@ export class WindowManager {
     this.mainWindow.once('ready-to-show', () => {
       if (this.mainWindow) {
         this.mainWindow.show();
-        
+
         // Focus the window
         if (process.env['NODE_ENV'] === 'development') {
           this.mainWindow.focus();
@@ -114,7 +114,7 @@ export class WindowManager {
       modal: false,
       show: false,
       title: 'Analysis Details - SecurityAnalyzer Pro',
-      
+
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -127,7 +127,7 @@ export class WindowManager {
       await analysisWindow.loadURL('http://localhost:3001#/analysis');
     } else {
       await analysisWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-        hash: 'analysis'
+        hash: 'analysis',
       });
     }
 
@@ -146,7 +146,7 @@ export class WindowManager {
       minHeight: 700,
       show: false,
       title: 'Report Generator - SecurityAnalyzer Pro',
-      
+
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -159,7 +159,7 @@ export class WindowManager {
       await reportWindow.loadURL('http://localhost:3001#/report');
     } else {
       await reportWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-        hash: 'report'
+        hash: 'report',
       });
     }
 

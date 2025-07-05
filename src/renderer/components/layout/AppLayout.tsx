@@ -8,20 +8,18 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
-    <div className="h-screen flex bg-gray-900 text-white">
+    <div className='h-screen flex bg-gray-900 text-white'>
       {/* Sidebar */}
       <Sidebar />
-      
+
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className='flex-1 flex flex-col overflow-hidden'>
         {/* Top Bar */}
         <TopBar />
-        
+
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gray-800">
-          <div className="h-full">
-            {children}
-          </div>
+        <main className='flex-1 overflow-auto bg-gray-800'>
+          <div className='h-full'>{children}</div>
         </main>
       </div>
     </div>

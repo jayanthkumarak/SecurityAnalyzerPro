@@ -28,7 +28,7 @@ export class SecurityManager {
 
       // Load or generate encryption key
       await this.loadOrGenerateEncryptionKey();
-      
+
       console.log('Security manager initialized successfully');
     } catch (error) {
       console.error('Failed to initialize security manager:', error);
@@ -45,10 +45,10 @@ export class SecurityManager {
       // Generate new key if file doesn't exist
       console.log('Generating new encryption key...');
       this.encryptionKey = crypto.randomBytes(SecurityManager.KEY_LENGTH);
-      
+
       // Save the key securely
       await fs.writeFile(
-        this.keyFilePath, 
+        this.keyFilePath,
         this.encryptionKey.toString('hex'),
         { mode: 0o600 } // Owner read/write only
       );
@@ -83,11 +83,7 @@ export class SecurityManager {
     }
 
     const iv = Buffer.from(encryptedData.iv, 'hex');
-    const decipher = crypto.createDecipherGCM(
-      encryptedData.algorithm,
-      this.encryptionKey,
-      iv
-    );
+    const decipher = crypto.createDecipherGCM(encryptedData.algorithm, this.encryptionKey, iv);
 
     decipher.setAAD(Buffer.from('SecurityAnalyzer'));
     decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
@@ -116,7 +112,7 @@ export class SecurityManager {
     }
 
     const sanitized: any = {};
-    
+
     for (const [key, value] of Object.entries(obj)) {
       // Sanitize file paths
       if (key.toLowerCase().includes('path') && typeof value === 'string') {
@@ -147,20 +143,20 @@ export class SecurityManager {
     // Replace user-specific paths with generic placeholders
     return filePath
       .replace(/C:\\Users\\[^\\]+/g, 'C:\\Users\\<USER>')
-      .replace(/\/Users\/[^\/]+/g, '/Users/<USER>')
+      .replace(/\/Users\/[^/]+/g, '/Users/<USER>')
       .replace(/\\AppData\\Local\\[^\\]+/g, '\\AppData\\Local\\<APP>')
-      .replace(/\/Library\/Application Support\/[^\/]+/g, '/Library/Application Support/<APP>');
+      .replace(/\/Library\/Application Support\/[^/]+/g, '/Library/Application Support/<APP>');
   }
 
   private sanitizeIPAddress(ip: string): string {
     // Replace last octet with XXX for IPv4 addresses
     const ipv4Regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}$/;
     const match = ip.match(ipv4Regex);
-    
+
     if (match) {
       return `${match[1]}XXX`;
     }
-    
+
     // For IPv6 or other formats, just indicate it's an IP
     return '<IP_ADDRESS>';
   }

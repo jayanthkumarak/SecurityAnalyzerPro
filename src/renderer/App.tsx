@@ -49,13 +49,13 @@ export const App: React.FC = () => {
 
   if (initError) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-400 mb-4">Initialization Error</h1>
-          <p className="text-gray-300 mb-4">{initError}</p>
+      <div className='min-h-screen bg-gray-900 flex items-center justify-center'>
+        <div className='text-center'>
+          <h1 className='text-2xl font-bold text-red-400 mb-4'>Initialization Error</h1>
+          <p className='text-gray-300 mb-4'>{initError}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className='px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700'
           >
             Retry
           </button>
@@ -74,11 +74,11 @@ export const App: React.FC = () => {
         <Router>
           <AppLayout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/cases" element={<CaseManager />} />
-              <Route path="/analysis" element={<AnalysisPage />} />
-              <Route path="/analysis/:id" element={<AnalysisPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path='/' element={<Dashboard />} />
+              <Route path='/cases' element={<CaseManager />} />
+              <Route path='/analysis' element={<AnalysisPage />} />
+              <Route path='/analysis/:id' element={<AnalysisPage />} />
+              <Route path='/settings' element={<SettingsPage />} />
             </Routes>
           </AppLayout>
         </Router>

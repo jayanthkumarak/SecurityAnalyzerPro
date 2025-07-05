@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import { WindowManager } from './window-manager';
 import { SecurityManager } from './security/security-manager';
 import { DatabaseManager } from './database/database-manager';
@@ -21,7 +21,7 @@ class SecurityAnalyzerApp {
     this.windowManager = new WindowManager();
     this.fileProcessingService = new FileProcessingService();
     this.claudeService = new ClaudeAnalysisService(this.configManager);
-    
+
     this.initializeApp();
   }
 
@@ -56,10 +56,10 @@ class SecurityAnalyzerApp {
       // Initialize core services
       await this.databaseManager.initialize();
       await this.securityManager.initialize();
-      
+
       // Create main window
       await this.windowManager.createMainWindow();
-      
+
       console.log('SecurityAnalyzer Pro initialized successfully');
     } catch (error) {
       console.error('Failed to initialize application:', error);

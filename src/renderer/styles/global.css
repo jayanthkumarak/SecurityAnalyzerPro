@@ -9,12 +9,24 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
   overflow: hidden;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    'Noto Sans',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -156,7 +168,7 @@ html, body {
   .forensic-card {
     @apply rounded-md;
   }
-  
+
   .forensic-button-primary,
   .forensic-button-secondary {
     @apply text-sm py-1.5 px-3;
@@ -198,7 +210,8 @@ html, body {
 }
 
 @keyframes pulse-blue {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
