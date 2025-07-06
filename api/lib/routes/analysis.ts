@@ -10,6 +10,14 @@ const liveAnalysisSummaries = new Map<string, string>();
 const liveProgressTrackers = new Map<string, { intervalId: NodeJS.Timeout, currentProgress: number, isComplete: boolean, startTime: number }>();
 
 export async function analysisRoutes(fastify: FastifyInstance) {
+  fastify.addHook('onRequest', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch (err) {
+      reply.send(err);
+    }
+  });
+
   const onSummaryUpdate = (caseId: string, summary: string) => {
     liveAnalysisSummaries.set(caseId, summary);
     // Update progress (e.g., currentProgress based on time elapsed or model completion)

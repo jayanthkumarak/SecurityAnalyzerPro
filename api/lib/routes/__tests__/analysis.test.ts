@@ -21,6 +21,12 @@ describe('Analysis Routes', () => {
   });
 
   it('POST /analyze should start an analysis and return an ID', async () => {
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/login',
+    });
+    const { token } = JSON.parse(loginResponse.payload);
+
     const form = new FormData();
     form.append('files', Buffer.from('test file content'), {
       filename: 'test.txt',
@@ -32,7 +38,10 @@ describe('Analysis Routes', () => {
       method: 'POST',
       url: '/analyze',
       payload: form,
-      headers: form.getHeaders(),
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      },
     });
 
     expect(response.statusCode).toBe(200);
@@ -59,6 +68,12 @@ describe('Analysis Routes', () => {
   });
 
   it('GET /analysis/:id/status should return the status of an analysis', async () => {
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/login',
+    });
+    const { token } = JSON.parse(loginResponse.payload);
+    
     const form = new FormData();
     form.append('files', Buffer.from('test file content'), {
       filename: 'test.txt',
@@ -69,13 +84,17 @@ describe('Analysis Routes', () => {
       method: 'POST',
       url: '/analyze',
       payload: form,
-      headers: form.getHeaders(),
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      },
     });
     const { analysisId } = JSON.parse(analyzeResponse.payload);
 
     const statusResponse = await app.inject({
       method: 'GET',
       url: `/analysis/${analysisId}/status`,
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     expect(statusResponse.statusCode).toBe(200);
     const payload = JSON.parse(statusResponse.payload);
