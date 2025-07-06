@@ -22,4 +22,18 @@ describe('MediaGeneratorService', () => {
     expect(report.modelBreakdown.model1).toBeDefined();
     expect(report.modelBreakdown.model2).toBeDefined();
   });
+
+  it('should handle an empty array of artifacts', async () => {
+    const service = new MediaGeneratorService();
+    const caseId = 'empty-case';
+    const analysisArtifacts: any[] = [];
+
+    const report = await service.generateRichMediaReport(caseId, analysisArtifacts);
+
+    expect(report.caseId).toBe(caseId);
+    expect(report.summary.totalModels).toBe(0);
+    expect(report.summary.averageConfidence).toBe(0);
+    expect(report.charts.length).toBe(2);
+    expect(Object.keys(report.modelBreakdown).length).toBe(0);
+  });
 }); 

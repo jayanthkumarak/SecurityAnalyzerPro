@@ -39,4 +39,15 @@ describe('SummaryExtractorService', () => {
     expect(summary).toContain('Final Summary:');
     expect(summary.length).toBeLessThan(520);
   });
+
+  it('should handle empty or null chunks gracefully', () => {
+    const service = new SummaryExtractorService(() => {});
+    const initialSummary = service.getCurrentSummary();
+
+    service.processStreamChunk('test-model', '');
+    expect(service.getCurrentSummary()).toBe(initialSummary + ' test-model: ');
+
+    service.processStreamChunk('test-model', null as any);
+    expect(service.getCurrentSummary()).toContain('null'); // Or handle as desired
+  });
 }); 

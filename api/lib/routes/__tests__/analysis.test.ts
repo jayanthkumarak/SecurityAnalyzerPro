@@ -1,15 +1,44 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { FastifyInstance } from 'fastify';
+import { build } from '../../../app'; // Corrected path
+import FormData from 'form-data';
 // We would need a way to build and run the fastify app for true integration tests.
 // For now, these are conceptual tests. A test runner like supertest would be needed.
 
 describe('Analysis Routes', () => {
-  // This requires a running server, so this is a placeholder.
-  // We'd use a library like 'light-my-request' or supertest to test this properly.
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    app = await build();
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    if (app) {
+      await app.close();
+    }
+  });
+
   it('POST /analyze should start an analysis and return an ID', async () => {
-    // 1. Build app instance
-    // 2. Inject a request
-    // 3. Assert response
-    expect(true).toBe(true); // Placeholder
+    const form = new FormData();
+    form.append('files', Buffer.from('test file content'), {
+      filename: 'test.txt',
+      contentType: 'text/plain',
+    });
+    form.append('context', 'test context');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/analyze',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.payload);
+    expect(payload).toHaveProperty('analysisId');
+    expect(payload.status).toBe('started');
   });
 
   describe('SSE Streaming Endpoint', () => {
@@ -30,8 +59,27 @@ describe('Analysis Routes', () => {
   });
 
   it('GET /analysis/:id/status should return the status of an analysis', async () => {
-    // Placeholder
-    expect(true).toBe(true);
+    const form = new FormData();
+    form.append('files', Buffer.from('test file content'), {
+      filename: 'test.txt',
+      contentType: 'text/plain',
+    });
+
+    const analyzeResponse = await app.inject({
+      method: 'POST',
+      url: '/analyze',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+    const { analysisId } = JSON.parse(analyzeResponse.payload);
+
+    const statusResponse = await app.inject({
+      method: 'GET',
+      url: `/analysis/${analysisId}/status`,
+    });
+    expect(statusResponse.statusCode).toBe(200);
+    const payload = JSON.parse(statusResponse.payload);
+    expect(payload.status).toBe('processing');
   });
 
   it('GET /analysis/:id/results should return the results of a completed analysis', async () => {

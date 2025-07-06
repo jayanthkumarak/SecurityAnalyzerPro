@@ -18,10 +18,15 @@ export class StreamProcessorService {
     // This method will handle full, non-streaming model outputs
     async processStaticOutput(modelName: string, rawContent: string, caseId: string): Promise<void> {
         console.log(`[StreamProcessor] Processing static output from ${modelName}:`, rawContent.substring(0, 100) + '...');
-        const summary = await this.summaryExtractorService.extractSummary(rawContent);
-        console.log(`[StreamProcessor] Extracted summary:`, summary);
-        this.onSummaryUpdate(caseId, summary);
-        await this.dataStagingService.stageData(modelName, rawContent, summary);
+        try {
+            const summary = await this.summaryExtractorService.extractSummary(rawContent);
+            console.log(`[StreamProcessor] Extracted summary:`, summary);
+            this.onSummaryUpdate(caseId, summary);
+            await this.dataStagingService.stageData(modelName, rawContent, summary);
+        } catch (error) {
+            console.error(`[StreamProcessor] Error processing static output for ${modelName}:`, error);
+            // Do not re-throw, allow other analyses to continue
+        }
     }
 
     // This method will handle chunks from streaming model outputs

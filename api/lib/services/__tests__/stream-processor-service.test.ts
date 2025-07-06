@@ -58,4 +58,30 @@ describe('StreamProcessorService', () => {
     expect(summaryExtractor.processStreamChunk).toHaveBeenCalledWith(modelName, 'chunk2');
     expect(onSummaryUpdate).toHaveBeenCalledTimes(2);
   });
+
+  it('should handle errors during static output processing', async () => {
+    const onSummaryUpdate = mock((caseId: string, summary: string) => {});
+    const summaryExtractor = new SummaryExtractorService(onSummaryUpdate);
+    summaryExtractor.extractSummary = mock(async () => { throw new Error('Extraction failed'); });
+    
+    const dataStaging = new DataStagingService();
+    dataStaging.stageData = mock(async () => {});
+
+    const streamProcessor = new StreamProcessorService(onSummaryUpdate);
+    // @ts-ignore
+    streamProcessor.summaryExtractorService = summaryExtractor;
+    // @ts-ignore
+    streamProcessor.dataStagingService = dataStaging;
+
+    const modelName = 'error-model';
+    const rawContent = 'content';
+    const caseId = 'test-case-error';
+
+    // We expect the service to catch the error and not re-throw it.
+    await expect(streamProcessor.processStaticOutput(modelName, rawContent, caseId))
+      .resolves.toBe(undefined);
+    
+    // Check that staging was not called due to the error
+    expect(dataStaging.stageData).not.toHaveBeenCalled();
+  });
 }); 

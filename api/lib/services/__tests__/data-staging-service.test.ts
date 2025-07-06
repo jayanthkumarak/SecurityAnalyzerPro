@@ -28,4 +28,16 @@ describe('DataStagingService', () => {
     expect(fileContent.summary).toBe(summary);
     expect(fileContent.timestamp).toBeDefined();
   });
+
+  it('should handle file system errors gracefully', async () => {
+    const mockFs = {
+      mkdir: mock(async () => {}),
+      writeFile: mock(async () => { throw new Error('Disk full'); }),
+    };
+
+    const service = new DataStagingService(mockFs as any);
+    
+    // We expect the promise to resolve even if writing fails, as the error is caught internally.
+    await expect(service.stageData('error-model', 'content', 'summary')).resolves.toBe(undefined);
+  });
 }); 

@@ -30,7 +30,8 @@
     "bun": ">=1.0.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "light-my-request": "^6.6.0"
   },
   "scripts": {
     "dev": "concurrently -k -n API,WEB -c green,cyan \"bun run --cwd api dev\" \"bun run --cwd frontend dev\"",
@@ -40,5 +41,8 @@
     "test": "bun test",
     "clean": "rm -rf api/dist frontend/dist"
   },
-  "workspaces": ["api", "frontend"]
+  "workspaces": ["api", "frontend"],
+  "dependencies": {
+    "form-data": "^4.0.3"
+  }
 }
