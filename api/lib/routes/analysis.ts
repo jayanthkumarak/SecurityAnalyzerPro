@@ -6,9 +6,18 @@ import { randomUUID } from 'crypto';
 // In-memory storage for demo purposes
 const analysisResults = new Map<string, any>();
 const analysisRequests = new Map<string, AnalysisRequest>();
+const liveAnalysisSummaries = new Map<string, string>();
+const liveProgressTrackers = new Map<string, { intervalId: NodeJS.Timeout, currentProgress: number, isComplete: boolean, startTime: number }>();
 
 export async function analysisRoutes(fastify: FastifyInstance) {
-  const analysisService = new OpenRouterAnalysisService();
+  const onSummaryUpdate = (caseId: string, summary: string) => {
+    liveAnalysisSummaries.set(caseId, summary);
+    // Update progress (e.g., currentProgress based on time elapsed or model completion)
+    // For now, let's just log and update the summary
+    console.log(`[Frontend Update] Case ${caseId} Summary: ${summary.substring(0, 100)}...`);
+  };
+
+  const analysisService = new OpenRouterAnalysisService(onSummaryUpdate);
   const fileParser = new FileParserService();
 
   // Start multi-LLM analysis
@@ -69,6 +78,33 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         caseId
       });
 
+      // Initialize live progress tracker
+      let currentProgress = 0;
+      const totalLoadingTimeMs = 175 * 1000; // 175 seconds
+      const updateIntervalMs = 500; // Update every 500ms for smoothness
+
+      const intervalId = setInterval(() => {
+        const tracker = liveProgressTrackers.get(caseId);
+        if (tracker?.isComplete) {
+          clearInterval(intervalId);
+          return;
+        }
+        currentProgress = Math.min(currentProgress + (updateIntervalMs / totalLoadingTimeMs) * 100, 99);
+        liveProgressTrackers.set(caseId, { 
+          intervalId,
+          currentProgress,
+          isComplete: false,
+          startTime: tracker?.startTime || Date.now() // Preserve start time
+        });
+      }, updateIntervalMs);
+
+      liveProgressTrackers.set(caseId, { 
+        intervalId,
+        currentProgress,
+        isComplete: false,
+        startTime: Date.now()
+      });
+
       // Create analysis request
       const analysisRequest: AnalysisRequest = {
         files: contentBuffers,
@@ -101,7 +137,23 @@ export async function analysisRoutes(fastify: FastifyInstance) {
           synthesis
         });
 
+        // Mark analysis as complete and clear interval
+        const tracker = liveProgressTrackers.get(caseId);
+        if (tracker) {
+          clearInterval(tracker.intervalId);
+          liveProgressTrackers.set(caseId, { ...tracker, currentProgress: 100, isComplete: true });
+        }
+
         console.log(`Analysis ${caseId} completed with ${artifacts.length} artifacts`);
+
+        // Schedule cleanup to prevent memory leaks
+        setTimeout(() => {
+          analysisResults.delete(caseId);
+          analysisRequests.delete(caseId);
+          liveAnalysisSummaries.delete(caseId);
+          liveProgressTrackers.delete(caseId);
+          console.log(`Cleaned up in-memory data for case ${caseId}`);
+        }, 60000); // Clean up after 1 minute
       }).catch(error => {
         console.error(`Analysis ${caseId} failed:`, error);
         analysisResults.set(caseId, {
@@ -109,6 +161,21 @@ export async function analysisRoutes(fastify: FastifyInstance) {
           timestamp: new Date(),
           error: error.message
         });
+        // Mark analysis as complete (failed) and clear interval
+        const tracker = liveProgressTrackers.get(caseId);
+        if (tracker) {
+          clearInterval(tracker.intervalId);
+          liveProgressTrackers.set(caseId, { ...tracker, currentProgress: 100, isComplete: true });
+        }
+
+        // Schedule cleanup for failed analysis
+        setTimeout(() => {
+          analysisResults.delete(caseId);
+          analysisRequests.delete(caseId);
+          liveAnalysisSummaries.delete(caseId);
+          liveProgressTrackers.delete(caseId);
+          console.log(`Cleaned up in-memory data for failed case ${caseId}`);
+        }, 60000); // Clean up after 1 minute
       });
 
     } catch (error) {
@@ -120,32 +187,57 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   // Stream analysis results
   fastify.get('/analysis/:id/stream', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const analysisRequest = analysisRequests.get(id);
 
-    if (!analysisRequest) {
-      return reply.status(404).send({ error: 'Analysis not found or not yet started' });
-    }
-    
     // Set headers for SSE
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Connection', 'keep-alive');
     reply.raw.setHeader('Cache-Control', 'no-cache');
     reply.raw.setHeader('Access-Control-Allow-Origin', '*');
 
-    const activeModels = analysisService.getActiveModels();
-    const firstModel = activeModels[0];
-
-    try {
-      const stream = analysisService.analyzeWithModelStream(firstModel, analysisRequest);
-      for await (const chunk of stream) {
-        reply.raw.write(`data: ${JSON.stringify({ token: chunk, model: firstModel.name })}\n\n`);
+    const sendUpdate = () => {
+      try {
+        const summary = liveAnalysisSummaries.get(id) || "Waiting for analysis to start...";
+        const progressTracker = liveProgressTrackers.get(id);
+        const progress = progressTracker ? Math.floor(progressTracker.currentProgress) : 0;
+        const status = analysisResults.get(id)?.status || 'pending';
+  
+        reply.raw.write(`data: ${JSON.stringify({ summary, progress, status })}\n\n`);
+  
+        if (progressTracker && progressTracker.isComplete) {
+          console.log(`[SSE] Analysis ${id} completed, ending stream.`);
+          clearInterval(updateInterval);
+          reply.raw.end();
+        }
+      } catch (error) {
+        console.error(`SSE update error for ${id}:`, error);
+        clearInterval(updateInterval);
+        reply.raw.end();
       }
-    } catch (error) {
-      console.error('Streaming error:', error);
-      reply.raw.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
-    } finally {
-      reply.raw.end();
-    }
+    };
+
+    // Send initial update immediately
+    sendUpdate();
+
+    // Send updates every 500ms for smooth progress bar
+    const updateInterval = setInterval(sendUpdate, 500);
+
+    // Timeout the stream after 175 seconds if not completed to prevent hanging connections
+    const streamTimeout = setTimeout(() => {
+      const tracker = liveProgressTrackers.get(id);
+      if (tracker && !tracker.isComplete) {
+        console.log(`[SSE] Analysis ${id} timed out after 175s, ending stream.`);
+        clearInterval(updateInterval);
+        reply.raw.write(`data: ${JSON.stringify({ summary: "Analysis taking longer than expected.", progress: 99, status: 'timed_out' })}\n\n`);
+        reply.raw.end();
+      }
+    }, 175 * 1000); // 175 seconds
+
+    // Clean up on client disconnect
+    reply.raw.on('close', () => {
+      console.log(`[SSE] Client disconnected for analysis ${id}. Cleaning up.`);
+      clearInterval(updateInterval);
+      clearTimeout(streamTimeout);
+    });
   });
 
   // Get analysis status
@@ -229,6 +321,36 @@ export async function analysisRoutes(fastify: FastifyInstance) {
       }
     } catch (error) {
       console.error('Report generation error:', error);
+      reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // Get rich media analysis results
+  fastify.get('/analysis/:id/rich-results', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      
+      const results = analysisResults.get(id);
+      
+      if (!results || results.status !== 'completed') {
+        return reply.status(404).send({ error: 'Analysis not found or not completed' });
+      }
+
+      if (!results.artifacts || !results.synthesis) {
+        return reply.status(404).send({ error: 'Rich media data not available' });
+      }
+
+      // Generate rich media report using the new service
+      const richMediaReport = await analysisService.getMediaGeneratorService().generateRichMediaReport(id, results.artifacts);
+      
+      reply.send({
+        analysisId: id,
+        status: results.status,
+        richMedia: richMediaReport,
+        completedAt: results.timestamp
+      });
+    } catch (error) {
+      console.error('Rich media retrieval error:', error);
       reply.status(500).send({ error: 'Internal server error' });
     }
   });
