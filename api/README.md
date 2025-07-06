@@ -22,7 +22,7 @@ api/
 │   │   ├── openrouter-analysis-service.ts  # Multi-LLM orchestration
 │   │   ├── file-parser-service.ts         # File parsing (JSON, XML, CSV, etc.)
 │   │   ├── file-processing-service.ts     # Security analysis
-│   │   └── claude-analysis-service.ts     # Report rendering
+│   │   └── report-generation-service.ts   # Report rendering
 │   ├── storage/
 │   │   └── storage-manager.ts   # Encrypted artifact storage
 │   ├── database/                # Database management

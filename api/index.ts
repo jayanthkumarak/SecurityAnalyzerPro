@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { analyzeArtifact } from './lib/services/file-processing-service';
-import { renderReport } from './lib/services/claude-analysis-service';
+import { renderReport } from './lib/services/report-generation-service';
 import { StorageManager } from './lib/storage/storage-manager';
 import { analysisRoutes } from './lib/routes/analysis';
 import * as path from 'path';
