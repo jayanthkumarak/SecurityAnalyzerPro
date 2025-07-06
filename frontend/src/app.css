@@ -21,6 +21,26 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  background: none;
+}
+
+/* LCARS left rib */
+.lcars-rib {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 64px;
+  height: 100vh;
+  background: linear-gradient(
+    to bottom,
+    var(--accent-cyan) 0 20%,
+    var(--accent-pink) 20% 40%,
+    var(--accent-purple) 40% 60%,
+    var(--accent-yellow) 60% 100%
+  );
+  border-top-right-radius: 48px;
+  border-bottom-right-radius: 48px;
+  z-index: 10;
 }
 
 .lcars-header {
@@ -28,6 +48,7 @@ body {
   margin-bottom: 30px;
   align-items: stretch;
   height: 80px;
+  margin-left: 72px; /* offset for rib */
 }
 
 .lcars-title-block {
@@ -38,6 +59,7 @@ body {
   display: flex;
   align-items: center;
   width: fit-content;
+  color: var(--bg-color);
 }
 
 .lcars-title {
@@ -71,22 +93,25 @@ body {
   display: flex;
   margin-bottom: 30px;
   gap: 15px;
+  margin-left: 72px; /* offset for rib */
 }
 
 .lcars-nav-item {
   padding: 12px 20px;
-  background-color: white;
+  background-color: var(--accent-purple);
   border-radius: var(--radius-sm);
   font-family: 'Space Mono', monospace;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  color: var(--bg-color);
 }
 
 .lcars-nav-item:hover,
 .lcars-nav-item.active {
   background-color: var(--accent-cyan);
+  color: var(--bg-color);
   transform: translateY(-2px);
 }
 
@@ -96,15 +121,17 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 25px;
   margin-bottom: 30px;
+  margin-left: 72px; /* offset for rib */
 }
 
 /* Cards */
 .lcars-card {
-  background-color: white;
+  background-color: var(--accent-yellow);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   transition: transform 0.3s ease;
+  color: var(--bg-color);
 }
 
 .lcars-card:hover { transform: translateY(-5px); }
@@ -124,7 +151,7 @@ body {
 
 .lcars-card-text {
   margin-bottom: 20px;
-  color: #4a5568;
+  color: var(--bg-color);
 }
 
 .lcars-button {
@@ -137,11 +164,12 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
-  color: var(--text-color);
+  color: var(--bg-color);
 }
 
 .lcars-button:hover {
   background-color: var(--accent-purple);
+  color: var(--bg-color);
   transform: translateY(-2px);
 }
 
@@ -151,6 +179,7 @@ body {
   margin-top: 40px;
   align-items: stretch;
   height: 60px;
+  margin-left: 72px; /* offset for rib */
 }
 
 /* Status indicator */
@@ -161,6 +190,7 @@ body {
   font-family: 'Space Mono', monospace;
   font-size: 0.9rem;
   margin-top: 20px;
+  margin-left: 72px; /* offset for rib */
 }
 
 .lcars-status-indicator {
@@ -180,9 +210,13 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .lcars-header { flex-direction: column; height: auto; gap: 15px; }
+  .lcars-header { flex-direction: column; height: auto; gap: 15px; margin-left: 0; }
   .lcars-title-block { width: 100%; margin-right: 0; }
-  .lcars-main { grid-template-columns: 1fr; }
+  .lcars-main { grid-template-columns: 1fr; margin-left: 0; }
+  .lcars-nav { margin-left: 0; }
+  .lcars-footer { margin-left: 0; }
+  .lcars-status { margin-left: 0; }
+  .lcars-rib { display: none; }
 }
 
 /* ===== End LCARS THEME ===== */ 

@@ -51,8 +51,11 @@
   <nav class="lcars-nav flex mb-8 gap-4">
     {#each navItems as item, idx}
       <div
-        class="lcars-nav-item px-5 py-3 bg-white rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 shadow hover:bg-lcars-cyan hover:-translate-y-0.5 {activeNav === idx ? 'active bg-lcars-cyan -translate-y-0.5' : ''}"
+        class="lcars-nav-item px-5 py-3 rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 shadow hover:bg-lcars-cyan hover:-translate-y-0.5 {activeNav === idx ? 'active bg-lcars-cyan -translate-y-0.5' : ''}"
         on:click={() => setActiveNav(idx)}
+        tabindex="0"
+        role="button"
+        on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && setActiveNav(idx)}
       >
         {item}
       </div>
@@ -60,36 +63,36 @@
   </nav>
 
   <main class="lcars-main grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-    <div class="lcars-card bg-white rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1">
+    <div class="lcars-card rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1 bg-lcars-cyan">
       <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
       <div class="lcars-card-body p-6">
         <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4">System Status</h2>
-        <p class="lcars-card-text mb-5 text-gray-600">All systems operating within normal parameters. Quantum efficiency at 98.7%.</p>
-        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5">View Details</button>
+        <p class="lcars-card-text mb-5">All systems operating within normal parameters. Quantum efficiency at 98.7%.</p>
+        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 hover:bg-lcars-purple hover:-translate-y-0.5">View Details</button>
       </div>
     </div>
-    <div class="lcars-card bg-white rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1">
+    <div class="lcars-card rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1 bg-lcars-pink">
       <div class="lcars-card-header h-4 bg-lcars-pink"></div>
       <div class="lcars-card-body p-6">
         <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4">Mission Briefing</h2>
-        <p class="lcars-card-text mb-5 text-gray-600">New exploration mission scheduled for stardate 2023.42. Prepare all necessary equipment.</p>
-        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5">Accept Mission</button>
+        <p class="lcars-card-text mb-5">New exploration mission scheduled for stardate 2023.42. Prepare all necessary equipment.</p>
+        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 hover:bg-lcars-purple hover:-translate-y-0.5">Accept Mission</button>
       </div>
     </div>
-    <div class="lcars-card bg-white rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1">
+    <div class="lcars-card rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1 bg-lcars-purple">
       <div class="lcars-card-header h-4 bg-lcars-purple"></div>
       <div class="lcars-card-body p-6">
         <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4">Communications</h2>
-        <p class="lcars-card-text mb-5 text-gray-600">3 new messages received from Starfleet Command. Priority level: Standard.</p>
-        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5">Open Messages</button>
+        <p class="lcars-card-text mb-5">3 new messages received from Starfleet Command. Priority level: Standard.</p>
+        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 hover:bg-lcars-purple hover:-translate-y-0.5">Open Messages</button>
       </div>
     </div>
-    <div class="lcars-card bg-white rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1">
+    <div class="lcars-card rounded-lg overflow-hidden shadow transition-transform duration-300 hover:-translate-y-1 bg-lcars-yellow">
       <div class="lcars-card-header h-4 bg-lcars-yellow"></div>
       <div class="lcars-card-body p-6">
         <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4">Science Lab</h2>
-        <p class="lcars-card-text mb-5 text-gray-600">Ongoing experiments: 4. Latest results show promising developments in quantum computing.</p>
-        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5">View Research</button>
+        <p class="lcars-card-text mb-5">Ongoing experiments: 4. Latest results show promising developments in quantum computing.</p>
+        <button class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 hover:bg-lcars-purple hover:-translate-y-0.5">View Research</button>
       </div>
     </div>
   </main>
