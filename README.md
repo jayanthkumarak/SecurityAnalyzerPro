@@ -1,51 +1,68 @@
-# ForensicAnalyzerPro Web
+# ForensicAnalyzerPro
 
-AI-powered digital forensics platform with a modern web interface. Upload digital artifacts and get comprehensive forensic analysis reports powered by artificial intelligence.
+AI-powered digital forensics platform with multi-LLM analysis capabilities. Upload digital artifacts and get comprehensive forensic analysis reports powered by multiple AI models through OpenRouter.
 
 ## 🌟 Features
 
-- **AI-Powered Analysis**: Advanced forensic analysis using Claude AI
-- **Modern Web Interface**: Clean, responsive React-based UI
-- **File Upload & Processing**: Support for various digital artifact formats
-- **Markdown Reports**: Detailed forensic reports in markdown format
+- **Multi-LLM Analysis**: Leverages multiple AI models (Gemini, GPT-4, Claude, DeepSeek) for comprehensive analysis
+- **LCARS Star Trek UI**: Futuristic interface with cyan, pink, purple, and yellow color scheme
+- **Real-time Streaming**: Live analysis progress with Server-Sent Events (SSE)
+- **File Upload & Processing**: Support for various digital artifact formats (JSON, XML, CSV, LOG, TXT, EVTX)
+- **Tiered Analysis**: Free tier (1 model) and Pro tier (5 models) options
 - **RESTful API**: Fastify-based backend for scalable processing
+- **Forensic Reports**: Detailed reports with consensus findings and model-specific artifacts
 
 ## 🏗️ Architecture
 
 This is a modern web application with:
 
-- **Frontend**: React + Vite + TypeScript + Tailwind CSS
-- **Backend**: Fastify + TypeScript + Node.js
+- **Frontend**: SvelteKit + TypeScript + Tailwind CSS (LCARS theme)
+- **Backend**: Fastify + TypeScript + Bun
+- **AI Integration**: OpenRouter API for multi-model access
+- **Database**: SQLite (via Bun's native module)
 - **Package Manager**: Bun (fast JavaScript runtime & package manager)
-- **CI/CD**: GitHub Actions
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - [Bun](https://bun.sh/) >= 1.0.0
-- Node.js >= 18.0.0
+- OpenRouter API key
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/jayanthkumarak/SecurityAnalyzerPro.git
-cd SecurityAnalyzerPro
+git clone https://github.com/jayanthkumarak/ForensicAnalyzerPro.git
+cd ForensicAnalyzerPro
 
 # Install dependencies
 bun install
 ```
 
+### Configuration
+
+Create a `.env` file in the project root:
+
+```env
+# OpenRouter API Configuration
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+SITE_URL=http://localhost:5173
+ANALYSIS_TIER=pro  # or 'free' for single model
+
+# Optional
+PORT=4000
+```
+
 ### Development
 
 ```bash
-# Start both web and API servers
+# Start both API and frontend servers
 bun run dev
 
 # Or start individually:
-bun run dev:web   # Web app on http://localhost:3001
 bun run dev:api   # API server on http://localhost:4000
+bun run dev:web   # Frontend on http://localhost:5173
 ```
 
 ### Production Build
@@ -58,61 +75,111 @@ bun run build
 bun run start
 ```
 
-## Quick start (dev)
-
-bun install        # installs root + api + web deps
-bun run dev        # starts API on :4000 and Web on :5173
-
 ## 📁 Project Structure
 
 ```
 ForensicAnalyzerPro/
-├── web/                 # React frontend application
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── vite.config.ts
-├── api/                 # Fastify backend API
+├── api/                    # Backend API
 │   ├── lib/
-│   ├── index.ts
+│   │   ├── routes/        # API routes
+│   │   │   └── +page.svelte  # Main forensic analysis UI
+│   │   ├── services/      # Business logic
+│   │   │   ├── openrouter-analysis-service.ts  # Multi-LLM orchestration
+│   │   │   ├── file-parser-service.ts         # File parsing
+│   │   │   └── ...
+│   │   └── storage/       # Data persistence
+│   ├── data/              # SQLite database & artifacts
+│   ├── index.ts           # API entry point
 │   └── package.json
-├── .github/             # CI/CD workflows
-├── package.json         # Root package.json (monorepo)
+├── frontend/              # SvelteKit frontend
+│   ├── src/
+│   │   ├── routes/        # Pages
+│   │   │   └── +page.svelte  # Main forensic analysis UI
+│   │   ├── app.css        # LCARS theme styles
+│   │   └── app.html       # HTML template
+│   ├── static/            # Static assets
+│   └── package.json
+├── .github/               # CI/CD workflows
+├── package.json           # Root package.json (monorepo)
+├── .env                   # Environment variables
 └── README.md
 ```
 
-## 🛠️ Available Scripts
+## 🔧 API Endpoints
 
-- `bun run dev` - Start development servers (web + API)
-- `bun run build` - Build both applications
-- `bun run start` - Start production servers
-- `bun run test` - Run tests
-- `bun run lint` - Run linting
-- `bun run clean` - Clean build artifacts and dependencies
+### Analysis Endpoints
 
-## 🔧 Configuration
+- `POST /analyze` - Start forensic analysis with file uploads
+- `GET /analysis/:id/status` - Check analysis status
+- `GET /analysis/:id/stream` - SSE stream for live updates
+- `GET /analysis/:id/results` - Get analysis results
+- `GET /analysis/:id/report` - Download report (markdown/json)
 
-### Environment Variables
+### Artifact Management
 
-Create `.env` files in the respective directories:
+- `GET /artifacts` - List all artifacts
+- `GET /artifacts/:id` - Get artifact metadata
+- `GET /artifacts/:id/download` - Download artifact
+- `DELETE /artifacts/:id` - Delete artifact
 
-**api/.env**:
-```
-ANTHROPIC_API_KEY=your_claude_api_key_here
-PORT=4000
-```
+## 🤖 Multi-LLM Analysis Pipeline
 
-**web/.env**:
-```
-VITE_API_URL=http://localhost:4000
-```
+The system uses OpenRouter to access multiple AI models:
+
+### Free Tier (1 model)
+- **Gemini 2.5 Flash**: Rapid analysis and triage
+
+### Pro Tier (5 models)
+- **Gemini 2.5 Flash**: Rapid triage and initial assessment
+- **Gemini 2.5 Pro**: Deep technical analysis and pattern recognition
+- **GPT-4.1**: Comprehensive analysis with high accuracy
+- **Claude Sonnet 4**: Enterprise-grade reliability and detailed reasoning
+- **DeepSeek Chat**: Cost-effective analysis with good performance
+
+Each model analyzes the evidence independently, then results are synthesized to provide:
+- Consensus findings across models
+- Confidence scoring
+- Conflicting interpretations highlighted
+- Comprehensive forensic report
 
 ## 📊 Usage
 
-1. Open your browser to `http://localhost:3001`
-2. Click "Choose file" to select a digital artifact
-3. Click "Analyze" to process the file
-4. View the AI-generated forensic analysis report
+1. Open your browser to `http://localhost:5173`
+2. Navigate to the "Analysis" tab
+3. Upload digital evidence files (logs, audit trails, etc.)
+4. Optionally provide analysis context
+5. Select analysis tier (Free/Pro)
+6. Click "Start Analysis" to begin
+7. Watch real-time streaming from the first model
+8. View comprehensive results with consensus findings
+9. Download reports in Markdown or JSON format
+
+## 🎨 LCARS UI Theme
+
+The interface features a Star Trek LCARS-inspired design with:
+- Rounded "pill" elements in accent colors
+- Card-based layouts with colored headers
+- Live stardate display (YYYY.DDD • HH:MM:SS)
+- Responsive design for desktop and mobile
+- Typography: Inter (body) & Exo 2 (headings)
+
+## 🔒 Security Features
+
+- Encrypted artifact storage
+- Secure file handling with validation
+- API key protection
+- Comprehensive audit logging
+- Chain of custody tracking
+
+## 🧪 Testing
+
+```bash
+# Run tests
+bun test
+
+# Run linting
+bun run lint
+```
 
 ## 🤝 Contributing
 
@@ -134,6 +201,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Powered by [Claude AI](https://www.anthropic.com/claude) for intelligent analysis
-- Built with [React](https://reactjs.org/) and [Fastify](https://www.fastify.io/)
-- UI inspired by [Perplexity.ai](https://perplexity.ai/)
+- Powered by [OpenRouter](https://openrouter.ai/) for multi-model AI access
+- UI inspired by Star Trek LCARS design system
+- Built with [SvelteKit](https://kit.svelte.dev/) and [Fastify](https://www.fastify.io/)
+- Fast runtime provided by [Bun](https://bun.sh/)
+
+## 📸 Screenshots
+
+### Analysis Interface
+The main forensic analysis interface with file upload, context input, and tier selection.
+
+### Live Streaming
+Real-time analysis progress showing model output as it's generated.
+
+### Results View
+Comprehensive results with consensus findings and individual model artifacts.
+
+---
+
+Live long and prosper! 🖖

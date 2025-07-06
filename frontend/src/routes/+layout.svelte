@@ -101,8 +101,9 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    height: 100vh;
-    overflow: hidden;
+    background-color: #111827;
+    color: #f3f4f6;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 
   :global(html) {

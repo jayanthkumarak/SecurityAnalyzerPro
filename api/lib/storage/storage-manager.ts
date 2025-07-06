@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -22,7 +22,7 @@ export interface StorageConfig {
 }
 
 export class StorageManager {
-  private db: Database.Database;
+  private db: Database;
   private config: StorageConfig;
   private encryptionKey: Buffer;
 
@@ -35,6 +35,7 @@ export class StorageManager {
     
     // Initialize database
     this.db = new Database(config.dbPath);
+    this.db.exec(`PRAGMA journal_mode = WAL;`); // Enable WAL mode for better performance
     this.initializeDatabase();
   }
 
@@ -88,12 +89,12 @@ export class StorageManager {
     const encryptedData = this.encrypt(fileBuffer);
     
     // Insert into database
-    const stmt = this.db.prepare(`
+    const query = this.db.query(`
       INSERT INTO artifacts (id, filename, original_name, size, mime_type, hash, encrypted_data, case_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    stmt.run(id, filename, originalName, fileBuffer.length, mimeType, hash, encryptedData, caseId);
+    query.run(id, filename, originalName, fileBuffer.length, mimeType, hash, encryptedData, caseId);
     
     return {
       id,
@@ -109,8 +110,8 @@ export class StorageManager {
   }
 
   async getArtifact(id: string): Promise<Artifact | null> {
-    const stmt = this.db.prepare('SELECT * FROM artifacts WHERE id = ?');
-    const row = stmt.get(id) as any;
+    const query = this.db.query('SELECT * FROM artifacts WHERE id = ?');
+    const row = query.get(id) as any;
     
     if (!row) return null;
     
@@ -135,15 +136,15 @@ export class StorageManager {
   }
 
   async listArtifacts(caseId?: string): Promise<Artifact[]> {
-    let stmt;
+    let query;
     let rows;
     
     if (caseId) {
-      stmt = this.db.prepare('SELECT * FROM artifacts WHERE case_id = ? ORDER BY created_at DESC');
-      rows = stmt.all(caseId);
+      query = this.db.query('SELECT * FROM artifacts WHERE case_id = ? ORDER BY created_at DESC');
+      rows = query.all(caseId);
     } else {
-      stmt = this.db.prepare('SELECT * FROM artifacts ORDER BY created_at DESC');
-      rows = stmt.all();
+      query = this.db.query('SELECT * FROM artifacts ORDER BY created_at DESC');
+      rows = query.all();
     }
     
     return rows.map((row: any) => ({
@@ -160,8 +161,8 @@ export class StorageManager {
   }
 
   async deleteArtifact(id: string): Promise<boolean> {
-    const stmt = this.db.prepare('DELETE FROM artifacts WHERE id = ?');
-    const result = stmt.run(id);
+    const query = this.db.query('DELETE FROM artifacts WHERE id = ?');
+    const result = query.run(id);
     return result.changes > 0;
   }
 

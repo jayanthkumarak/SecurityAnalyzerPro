@@ -4,6 +4,7 @@ import multipart from '@fastify/multipart';
 import { analyzeArtifact } from './lib/services/file-processing-service';
 import { renderReport } from './lib/services/claude-analysis-service';
 import { StorageManager } from './lib/storage/storage-manager';
+import { analysisRoutes } from './lib/routes/analysis';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
@@ -16,47 +17,23 @@ const storageManager = new StorageManager({
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: '*' });
-await app.register(multipart);
+await app.register(multipart, {
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    files: 10 // Max 10 files
+  }
+});
+
+// Register analysis routes
+await app.register(analysisRoutes);
 
 // Health check endpoint
 app.get('/health', async () => {
   return { status: 'ok', timestamp: new Date().toISOString() };
 });
 
-// Upload and analyze artifact
-app.post('/analyze', async (req, reply) => {
-  try {
-    const data = await req.file();
-    if (!data) {
-      return reply.code(400).send({ error: 'No file uploaded' });
-    }
-
-    const buffer = await data.toBuffer();
-    const mimeType = data.mimetype || 'application/octet-stream';
-    
-    // Store the artifact
-    const artifact = await storageManager.storeArtifact(
-      buffer,
-      data.filename || 'unknown',
-      mimeType
-    );
-
-    // Analyze the artifact
-    const analysis = await analyzeArtifact(buffer);
-    const report = await renderReport(analysis, 'md');
-
-    return {
-      artifactId: artifact.id,
-      filename: artifact.originalName,
-      size: artifact.size,
-      hash: artifact.hash,
-      report
-    };
-  } catch (error) {
-    console.error('Error processing file:', error);
-    return reply.code(500).send({ error: 'Failed to process file' });
-  }
-});
+// Note: The /analyze route is now handled by analysisRoutes
+// See lib/routes/analysis.ts for the multi-LLM analysis implementation
 
 // Get artifact by ID
 app.get('/artifacts/:id', async (req, reply) => {
@@ -141,6 +118,7 @@ app.delete('/artifacts/:id', async (req, reply) => {
   }
 });
 
-app.listen({ port: 4000 }, () =>
-  console.log('🚀 API ready → http://localhost:4000'),
+const PORT = parseInt(process.env.PORT || '4000');
+app.listen({ port: PORT, host: '0.0.0.0' }, () =>
+  console.log(`🚀 API ready → http://localhost:${PORT}`),
 );
