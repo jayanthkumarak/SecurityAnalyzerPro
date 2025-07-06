@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== LCARS THEME ===== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.lcars-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.lcars-header {
+  display: flex;
+  margin-bottom: 30px;
+  align-items: stretch;
+  height: 80px;
+}
+
+.lcars-title-block {
+  background-color: var(--accent-cyan);
+  border-radius: var(--radius-lg);
+  padding: 15px 25px;
+  margin-right: 15px;
+  display: flex;
+  align-items: center;
+  width: fit-content;
+}
+
+.lcars-title {
+  font-family: 'Exo 2', sans-serif;
+  font-weight: 700;
+  font-size: 1.8rem;
+  letter-spacing: 1px;
+}
+
+.lcars-header-bar {
+  flex-grow: 1;
+  display: flex;
+  gap: 15px;
+}
+
+.lcars-pill {
+  border-radius: var(--radius-lg);
+  height: 100%;
+}
+
+.lcars-pill-lg { flex-grow: 1; }
+.lcars-pill-sm { width: 80px; }
+
+.lcars-pink   { background-color: var(--accent-pink); }
+.lcars-cyan   { background-color: var(--accent-cyan); }
+.lcars-purple { background-color: var(--accent-purple); }
+.lcars-yellow { background-color: var(--accent-yellow); }
+
+/* Nav */
+.lcars-nav {
+  display: flex;
+  margin-bottom: 30px;
+  gap: 15px;
+}
+
+.lcars-nav-item {
+  padding: 12px 20px;
+  background-color: white;
+  border-radius: var(--radius-sm);
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.lcars-nav-item:hover,
+.lcars-nav-item.active {
+  background-color: var(--accent-cyan);
+  transform: translateY(-2px);
+}
+
+/* Main grid */
+.lcars-main {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 25px;
+  margin-bottom: 30px;
+}
+
+/* Cards */
+.lcars-card {
+  background-color: white;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: transform 0.3s ease;
+}
+
+.lcars-card:hover { transform: translateY(-5px); }
+
+.lcars-card-header {
+  height: 15px;
+}
+
+.lcars-card-body { padding: 25px; }
+
+.lcars-card-title {
+  font-family: 'Exo 2', sans-serif;
+  font-weight: 700;
+  font-size: 1.4rem;
+  margin-bottom: 15px;
+}
+
+.lcars-card-text {
+  margin-bottom: 20px;
+  color: #4a5568;
+}
+
+.lcars-button {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: var(--accent-cyan);
+  border-radius: var(--radius-sm);
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  color: var(--text-color);
+}
+
+.lcars-button:hover {
+  background-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+
+/* Footer */
+.lcars-footer {
+  display: flex;
+  margin-top: 40px;
+  align-items: stretch;
+  height: 60px;
+}
+
+/* Status indicator */
+.lcars-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.9rem;
+  margin-top: 20px;
+}
+
+.lcars-status-indicator {
+  width: 10px;
+  height: 10px;
+  background-color: #10b981;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .lcars-header { flex-direction: column; height: auto; gap: 15px; }
+  .lcars-title-block { width: 100%; margin-right: 0; }
+  .lcars-main { grid-template-columns: 1fr; }
+}
+
+/* ===== End LCARS THEME ===== */ 
