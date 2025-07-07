@@ -4,6 +4,24 @@
 
 /* ===== LCARS THEME ===== */
 
+:root {
+  /* LCARS Color Variables */
+  --bg-color: #000000;
+  --text-color: #ffffff;
+  --accent-cyan: #99ccff;
+  --accent-pink: #ff9966;
+  --accent-purple: #cc66cc;
+  --accent-yellow: #ffe066;
+  
+  /* Accessibility: Ensure sufficient contrast */
+  --text-on-dark: #ffffff;
+  --text-on-light: #000000;
+  
+  /* Radii */
+  --radius-lg: 32px;
+  --radius-sm: 12px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -418,6 +436,123 @@ body::before {
   .lcars-footer { margin-left: 0; }
   .lcars-status { margin-left: 0; }
   .lcars-rib { display: none; }
+}
+
+/* ===== ACCESSIBILITY IMPROVEMENTS ===== */
+
+/* Focus indicators for keyboard navigation */
+button:focus,
+input:focus,
+textarea:focus,
+[tabindex]:focus {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Ensure buttons have sufficient contrast and are accessible */
+.lcars-button:focus {
+  outline: 2px solid var(--accent-yellow);
+  outline-offset: 2px;
+}
+
+.lcars-nav-item:focus {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --accent-cyan: #00bfff;
+    --accent-pink: #ff6347;
+    --accent-purple: #da70d6;
+    --accent-yellow: #ffd700;
+  }
+}
+
+/* Dark mode support (already dark by default, but ensuring compatibility) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #000000;
+    --text-color: #ffffff;
+  }
+}
+
+/* Ensure sufficient color contrast ratios */
+.text-on-cyan {
+  color: var(--text-on-light);
+}
+
+.text-on-pink {
+  color: var(--text-on-light);
+}
+
+.text-on-purple {
+  color: var(--text-on-dark);
+}
+
+.text-on-yellow {
+  color: var(--text-on-light);
+}
+
+/* Error state accessibility */
+.error {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+
+.error:focus {
+  outline-color: #ff6b6b;
+}
+
+/* Loading state accessibility */
+.loading {
+  position: relative;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* Mobile touch targets */
+@media (hover: none) and (pointer: coarse) {
+  .lcars-button,
+  .lcars-nav-item {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* ===== End LCARS THEME ===== */ 

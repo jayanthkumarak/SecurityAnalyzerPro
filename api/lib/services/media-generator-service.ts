@@ -15,6 +15,16 @@ export class MediaGeneratorService {
             .flatMap(a => a.findings)
             .reduce((max, f) => severityOrder.indexOf(f.severity) > severityOrder.indexOf(max) ? f.severity : max, 'low');
 
+        // Calculate findings by severity for pie chart
+        const severityCounts = { low: 0, medium: 0, high: 0, critical: 0 };
+        for (const artifact of analysisArtifacts) {
+            for (const finding of (artifact.findings || [])) {
+                if (['low', 'medium', 'high', 'critical'].includes(finding.severity)) {
+                    severityCounts[finding.severity as 'low' | 'medium' | 'high' | 'critical']++;
+                }
+            }
+        }
+
         return {
             caseId,
             reportTitle: `Rich Media Analysis Report for ${caseId}`,
@@ -27,7 +37,7 @@ export class MediaGeneratorService {
             },
             charts: [
                 { type: 'bar', title: 'Confidence per Model', data: analysisArtifacts.map(a => ({ model: a.modelName, confidence: a.confidence })) },
-                { type: 'pie', title: 'Findings by Severity', data: { high: 1, critical: 1 } } // Placeholder data
+                { type: 'pie', title: 'Findings by Severity', data: severityCounts }
             ],
             timeline: {
                 events: [ { timestamp: new Date().toISOString(), description: 'Analysis Started' }] // Placeholder

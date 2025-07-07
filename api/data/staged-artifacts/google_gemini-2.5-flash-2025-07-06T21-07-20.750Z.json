@@ -1,0 +1,6 @@
+{
+  "model": "google/gemini-2.5-flash",
+  "timestamp": "2025-07-06T21:07:20.750Z",
+  "rawContent": "```json\n{\"findings\": [{\"category\": \"Test Finding\",\"severity\": \"high\",\"description\": \"A test finding.\"}]}\n```",
+  "summary": "Final Summary: ```json\n{\"findings\": [{\"category\": \"Test Finding\",\"severity\": \"high\",\"description\": \"A test finding.\"}]}\n```..."
+}

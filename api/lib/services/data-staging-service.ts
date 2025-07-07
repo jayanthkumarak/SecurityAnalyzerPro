@@ -15,7 +15,7 @@ export class DataStagingService {
         try {
             const timestamp = new Date().toISOString().replace(/:/g, '-');
             const filename = `${modelName.replace('/', '_')}-${timestamp}.json`;
-            const dirPath = path.join(process.cwd(), 'api', 'data', 'staged-artifacts');
+            const dirPath = path.join(__dirname, '../../data/staged-artifacts');
             const filePath = path.join(dirPath, filename);
 
             await this.fs.mkdir(dirPath, { recursive: true });

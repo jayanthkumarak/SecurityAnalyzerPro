@@ -31,8 +31,18 @@ export class StreamProcessorService {
 
     // This method will handle chunks from streaming model outputs
     async processStreamChunk(modelName: string, chunk: string, caseId: string): Promise<void> {
-        const currentSummary = this.summaryExtractorService.processStreamChunk(modelName, chunk);
+        const currentSummary = this.summaryExtractorService.processStreamChunk(caseId, modelName, chunk);
         this.onSummaryUpdate(caseId, currentSummary);
         console.log(`[StreamProcessor] Processing stream chunk from ${modelName}:`, chunk.substring(0, 50) + '...');
+    }
+
+    // Call this when a streaming model output is complete
+    async streamComplete(modelName: string, caseId: string, rawContent: string): Promise<void> {
+        try {
+            const summary = this.summaryExtractorService.getCurrentSummary(caseId);
+            await this.dataStagingService.stageData(modelName, rawContent, summary);
+        } catch (error) {
+            console.error(`[StreamProcessor] Error staging completed stream for ${modelName}:`, error);
+        }
     }
 } 

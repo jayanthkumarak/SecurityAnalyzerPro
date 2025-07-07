@@ -8,15 +8,17 @@ const analysisResults = new Map<string, any>();
 const analysisRequests = new Map<string, AnalysisRequest>();
 const liveAnalysisSummaries = new Map<string, string>();
 const liveProgressTrackers = new Map<string, { intervalId: NodeJS.Timeout, currentProgress: number, isComplete: boolean, startTime: number }>();
+const modelStatuses = new Map<string, Record<string, string>>();
 
 export async function analysisRoutes(fastify: FastifyInstance) {
-  fastify.addHook('onRequest', async (request, reply) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
-      reply.send(err);
-    }
-  });
+  // TODO: Enable authentication in production
+  // fastify.addHook('onRequest', async (request, reply) => {
+  //   try {
+  //     await request.jwtVerify();
+  //   } catch (err) {
+  //     reply.send(err);
+  //   }
+  // });
 
   const onSummaryUpdate = (caseId: string, summary: string) => {
     liveAnalysisSummaries.set(caseId, summary);
@@ -36,6 +38,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
       const fileNames: string[] = [];
       let context = '';
       let caseId = randomUUID();
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
 
       // Process uploaded files
       for await (const file of files) {
@@ -83,7 +86,8 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         fileNames,
         context: context || 'General forensic analysis',
         priority: 'quality',
-        caseId
+        caseId,
+        userId
       });
 
       // Initialize live progress tracker
@@ -119,8 +123,17 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         fileNames,
         context: context || 'General forensic analysis',
         priority: 'quality',
-        caseId
+        caseId,
+        userId
       };
+
+      // Initialize model statuses
+      const initialModelStatuses: Record<string, string> = {};
+      const activeModels = analysisService.getActiveModelNames();
+      activeModels.forEach((model: string) => {
+        initialModelStatuses[model] = 'pending';
+      });
+      modelStatuses.set(caseId, initialModelStatuses);
 
       // Return immediately with analysis ID
       reply.send({
@@ -129,7 +142,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         message: 'Multi-LLM analysis initiated',
         estimatedTime: '5-10 minutes',
         tier: process.env.ANALYSIS_TIER || 'free',
-        models: analysisService.getActiveModelNames()
+        models: activeModels
       });
 
       // Process analysis in background
@@ -160,8 +173,9 @@ export async function analysisRoutes(fastify: FastifyInstance) {
           analysisRequests.delete(caseId);
           liveAnalysisSummaries.delete(caseId);
           liveProgressTrackers.delete(caseId);
+          modelStatuses.delete(caseId);
           console.log(`Cleaned up in-memory data for case ${caseId}`);
-        }, 60000); // Clean up after 1 minute
+        }, 1800000); // Clean up after 30 minutes
       }).catch(error => {
         console.error(`Analysis ${caseId} failed:`, error);
         analysisResults.set(caseId, {
@@ -182,8 +196,9 @@ export async function analysisRoutes(fastify: FastifyInstance) {
           analysisRequests.delete(caseId);
           liveAnalysisSummaries.delete(caseId);
           liveProgressTrackers.delete(caseId);
+          modelStatuses.delete(caseId);
           console.log(`Cleaned up in-memory data for failed case ${caseId}`);
-        }, 60000); // Clean up after 1 minute
+        }, 1800000); // Clean up after 30 minutes
       });
 
     } catch (error) {
@@ -195,12 +210,20 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   // Stream analysis results
   fastify.get('/analysis/:id/stream', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+
+    const analysisRequest = analysisRequests.get(id);
+    // TODO: Enable user check when authentication is enabled
+    // if (analysisRequest?.userId !== userId) {
+    //   return reply.status(403).send({ error: 'Forbidden' });
+    // }
 
     // Set headers for SSE
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Connection', 'keep-alive');
     reply.raw.setHeader('Cache-Control', 'no-cache');
-    reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+    const allowedOrigin = process.env.SITE_URL || 'http://localhost:5173';
+    reply.raw.setHeader('Access-Control-Allow-Origin', allowedOrigin);
 
     const sendUpdate = () => {
       try {
@@ -208,8 +231,9 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         const progressTracker = liveProgressTrackers.get(id);
         const progress = progressTracker ? Math.floor(progressTracker.currentProgress) : 0;
         const status = analysisResults.get(id)?.status || 'pending';
+        const currentModelStatuses = modelStatuses.get(id) || {};
   
-        reply.raw.write(`data: ${JSON.stringify({ summary, progress, status })}\n\n`);
+        reply.raw.write(`data: ${JSON.stringify({ summary, progress, status, modelStatuses: currentModelStatuses })}\n\n`);
   
         if (progressTracker && progressTracker.isComplete) {
           console.log(`[SSE] Analysis ${id} completed, ending stream.`);
@@ -252,7 +276,14 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   fastify.get('/analysis/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
       
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
+
       const results = analysisResults.get(id);
       
       if (!results) {
@@ -276,6 +307,13 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   fastify.get('/analysis/:id/results', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
       
       const results = analysisResults.get(id);
       
@@ -307,9 +345,16 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   fastify.get('/analysis/:id/report', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
       const query = request.query as { format?: string };
       const format = query.format || 'markdown';
       
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
+
       const results = analysisResults.get(id);
       
       if (!results || results.status !== 'completed') {
@@ -337,7 +382,14 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   fastify.get('/analysis/:id/rich-results', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
       
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
+
       const results = analysisResults.get(id);
       
       if (!results || results.status !== 'completed') {
@@ -366,14 +418,20 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   // List all analyses
   fastify.get('/analyses', async (request, reply) => {
     try {
-      const analyses = Array.from(analysisResults.entries()).map(([id, data]) => ({
-        id,
-        status: data.status,
-        createdAt: data.timestamp,
-        artifacts: data.artifacts?.length || 0,
-        confidence: data.synthesis?.confidenceScore || 0
-      }));
-      
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+      const analyses = Array.from(analysisResults.entries())
+        .filter(([id, data]) => {
+          const req = analysisRequests.get(id);
+          // TODO: Enable user filtering when authentication is enabled
+          return req; // && req.userId === userId;
+        })
+        .map(([id, data]) => ({
+          id,
+          status: data.status,
+          createdAt: data.timestamp,
+          artifacts: data.artifacts?.length || 0,
+          confidence: data.synthesis?.confidenceScore || 0
+        }));
       reply.send({ analyses });
     } catch (error) {
       console.error('List analyses error:', error);

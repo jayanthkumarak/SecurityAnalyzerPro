@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
   
   // State management
   let files: FileList | null = null;
   let context = '';
   let isAnalyzing = false;
   let analysisId = '';
-  let analysisStatus = '';
-  let streamingContent = '';
-  let analysisResults: any = null;
+  let analysisStatus = 'pending';
+  let analysisProgress = 0;
+  let analysisSummary = '';
+  let modelStatuses: Record<string, string> = {};
   let error = '';
   let eventSource: EventSource | null = null;
   let selectedTier = 'pro'; // Default to pro tier
+  let estimatedTime = '';
   
   // LCARS Navigation
   let activeNav = 0;
@@ -51,8 +54,45 @@
   // File upload handling
   function handleFileSelect(event: Event) {
     const target = event.target as HTMLInputElement;
-    files = target.files;
+    const selectedFiles = target.files;
     error = '';
+    
+    if (!selectedFiles || selectedFiles.length === 0) {
+      return;
+    }
+    
+    // Validate file types and sizes
+    const allowedTypes = ['.json', '.xml', '.csv', '.log', '.txt', '.evtx'];
+    const maxFileSize = 100 * 1024 * 1024; // 100MB
+    const invalidFiles: string[] = [];
+    const oversizedFiles: string[] = [];
+    
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      
+      if (!allowedTypes.includes(fileExtension)) {
+        invalidFiles.push(file.name);
+      }
+      
+      if (file.size > maxFileSize) {
+        oversizedFiles.push(file.name);
+      }
+    }
+    
+    if (invalidFiles.length > 0) {
+      error = `Unsupported file types: ${invalidFiles.join(', ')}. Please upload only: ${allowedTypes.join(', ')} files.`;
+      target.value = ''; // Clear the input
+      return;
+    }
+    
+    if (oversizedFiles.length > 0) {
+      error = `Files too large (max 100MB): ${oversizedFiles.join(', ')}. Please reduce file size or split into smaller files.`;
+      target.value = ''; // Clear the input
+      return;
+    }
+    
+    files = selectedFiles;
   }
   
   // Start analysis
@@ -64,8 +104,9 @@
     
     isAnalyzing = true;
     error = '';
-    streamingContent = '';
-    analysisResults = null;
+    analysisProgress = 0;
+    analysisSummary = '';
+    modelStatuses = {};
     
     try {
       const formData = new FormData();
@@ -93,12 +134,17 @@
       const result = await response.json();
       analysisId = result.analysisId;
       analysisStatus = result.status;
+      estimatedTime = result.estimatedTime || '5-10 minutes';
+      
+      // Initialize model statuses
+      if (result.models) {
+        result.models.forEach((model: string) => {
+          modelStatuses[model] = 'pending';
+        });
+      }
       
       // Start streaming
       startStreaming();
-      
-      // Poll for results
-      pollForResults();
       
     } catch (err) {
       error = err instanceof Error ? err.message : 'Analysis failed';
@@ -115,9 +161,32 @@
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.token) {
-          streamingContent += data.token;
+        
+        // Update progress, summary, and status only
+        if (data.progress !== undefined) {
+          analysisProgress = data.progress;
         }
+        
+        if (data.summary) {
+          analysisSummary = data.summary;
+        }
+        
+        if (data.status) {
+          analysisStatus = data.status;
+          
+          // If completed, auto-route to report page
+          if (data.status === 'completed') {
+            setTimeout(() => {
+              goto(`/report/${analysisId}`);
+            }, 1000); // Small delay to show completion
+          }
+        }
+        
+        // Update model statuses if provided
+        if (data.modelStatuses) {
+          modelStatuses = { ...modelStatuses, ...data.modelStatuses };
+        }
+        
       } catch (err) {
         console.error('Stream parse error:', err);
       }
@@ -127,73 +196,45 @@
       console.error('Stream error:', err);
       eventSource?.close();
       eventSource = null;
-    };
-  }
-  
-  // Poll for analysis results
-  async function pollForResults() {
-    if (!analysisId) return;
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`http://localhost:4000/analysis/${analysisId}/status`);
-        const status = await response.json();
-        
-        analysisStatus = status.status;
-        
-        if (status.status === 'completed') {
-          clearInterval(pollInterval);
-          await fetchResults();
-          isAnalyzing = false;
-        } else if (status.status === 'failed') {
-          clearInterval(pollInterval);
-          error = 'Analysis failed';
-          isAnalyzing = false;
+      
+      if (analysisStatus !== 'completed') {
+        // Provide user-friendly error messages
+        if (err.type === 'error') {
+          error = 'Connection to analysis server lost. Please check your internet connection and try again.';
+        } else {
+          error = 'An unexpected error occurred during analysis. Please try again.';
         }
-      } catch (err) {
-        console.error('Poll error:', err);
+        isAnalyzing = false;
       }
-    }, 2000);
-  }
-  
-  // Fetch final results
-  async function fetchResults() {
-    if (!analysisId) return;
-    
-    try {
-      const response = await fetch(`http://localhost:4000/analysis/${analysisId}/results`);
-      analysisResults = await response.json();
-    } catch (err) {
-      error = 'Failed to fetch results';
-    }
-  }
-  
-  // Download report
-  async function downloadReport(format: 'markdown' | 'json') {
-    if (!analysisId) return;
-    
-    try {
-      const response = await fetch(`http://localhost:4000/analysis/${analysisId}/report?format=${format}`);
-      const content = format === 'json' ? await response.json() : await response.text();
-      
-      const blob = new Blob([format === 'json' ? JSON.stringify(content, null, 2) : content], {
-        type: format === 'json' ? 'application/json' : 'text/markdown'
-      });
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `forensic-report-${analysisId}.${format === 'json' ? 'json' : 'md'}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      error = 'Failed to download report';
-    }
+    };
   }
   
   onDestroy(() => {
     eventSource?.close();
   });
+
+  // Get status badge color
+  function getStatusColor(status: string): string {
+    switch (status) {
+      case 'completed': return 'bg-green-500';
+      case 'processing': return 'bg-lcars-cyan';
+      case 'failed': return 'bg-red-500';
+      case 'pending': return 'bg-gray-400';
+      default: return 'bg-gray-400';
+    }
+  }
+
+  // Get model name for display
+  function getModelDisplayName(modelName: string): string {
+    const displayNames: Record<string, string> = {
+      'google/gemini-2.5-flash': 'Gemini Flash',
+      'google/gemini-2.5-pro': 'Gemini Pro',
+      'openai/gpt-4.1': 'GPT-4.1',
+      'anthropic/claude-sonnet-4': 'Claude Sonnet',
+      'deepseek/deepseek-chat': 'DeepSeek'
+    };
+    return displayNames[modelName] || modelName;
+  }
 </script>
 
 <div class="lcars-container font-sans bg-lcars-bg min-h-screen text-lcars-text">
@@ -209,13 +250,15 @@
     </div>
   </header>
 
-  <nav class="lcars-nav flex mb-8 gap-4">
+  <nav class="lcars-nav flex mb-8 gap-4" role="navigation" aria-label="Main navigation">
     {#each navItems as item, idx}
       <div
         class="lcars-nav-item px-5 py-3 bg-white rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 shadow hover:bg-lcars-cyan hover:-translate-y-0.5 {activeNav === idx ? 'active bg-lcars-cyan -translate-y-0.5' : ''}"
         on:click={() => setActiveNav(idx)}
         tabindex="0"
         role="button"
+        aria-pressed={activeNav === idx}
+        aria-label={`Navigate to ${item}`}
         on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && setActiveNav(idx)}
       >
         {item}
@@ -225,192 +268,190 @@
 
   <main class="lcars-main">
     {#if activeNav === 0}
-      <!-- Analysis Panel -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <!-- Upload Section -->
-        <div class="lg:col-span-2">
-          <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-            <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
-            <div class="lcars-card-body p-6">
-              <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-gray-800">Evidence Upload</h2>
-              
-              <div class="space-y-4">
-                <!-- File Upload -->
-                <div>
-                  <label for="file-upload" class="block text-sm font-medium mb-2 text-gray-700">Evidence Files</label>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    multiple
-                    on:change={handleFileSelect}
-                    class="w-full p-3 bg-gray-50 rounded-lg border border-gray-300 focus:border-lcars-cyan focus:outline-none text-gray-800"
-                    accept=".json,.xml,.csv,.log,.txt,.evtx"
-                  />
-                  <p class="text-xs text-gray-500 mt-1">Supported: M365 logs, audit trails, MSDE packages, event logs</p>
-                </div>
-                
-                <!-- Context Input -->
-                <div>
-                  <label for="context" class="block text-sm font-medium mb-2 text-gray-700">Analysis Context</label>
-                  <textarea
-                    id="context"
-                    bind:value={context}
-                    placeholder="Provide additional context for the analysis..."
-                    class="w-full p-3 bg-gray-50 rounded-lg border border-gray-300 focus:border-lcars-cyan focus:outline-none h-24 resize-none text-gray-800"
-                  ></textarea>
-                </div>
-                
-                <!-- Tier Selection -->
-                <div>
-                  <span class="block text-sm font-medium mb-2 text-gray-700">Analysis Tier</span>
-                  <div class="flex gap-4">
-                    <label class="flex items-center text-gray-700">
-                      <input type="radio" bind:group={selectedTier} value="free" class="mr-2" />
-                      <span>Free (1 model)</span>
-                    </label>
-                    <label class="flex items-center text-gray-700">
-                      <input type="radio" bind:group={selectedTier} value="pro" class="mr-2" />
-                      <span>Pro (5 models)</span>
-                    </label>
-                  </div>
-                </div>
-                
-                <!-- Analyze Button -->
-                <button
-                  on:click={startAnalysis}
-                  disabled={isAnalyzing || !files}
-                  class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAnalyzing ? 'Analyzing...' : 'Start Analysis'}
-                </button>
-              </div>
-              
-              {#if error}
-                <div class="mt-4 p-3 bg-red-100 border border-red-400 rounded-lg text-red-700">
-                  {error}
-                </div>
-              {/if}
-            </div>
+      {#if isAnalyzing}
+        <!-- Full-Screen Progress Interface -->
+        <div class="fixed inset-0 bg-lcars-bg z-50 flex flex-col">
+          <!-- Header -->
+          <div class="flex items-center justify-between p-6 bg-black/20">
+            <h1 class="text-3xl font-lcars font-bold text-lcars-cyan">FORENSIC ANALYSIS IN PROGRESS</h1>
+            <div class="text-lg font-lcars">Stardate {stardate}</div>
           </div>
-        </div>
-
-        <!-- Status Panel -->
-        <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-          <div class="lcars-card-header h-4 bg-lcars-purple"></div>
-          <div class="lcars-card-body p-6">
-            <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-gray-800">System Status</h2>
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">API Status</span>
-                <span class="text-green-600 font-medium">ONLINE</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">Analysis Tier</span>
-                <span class="text-lcars-cyan font-medium uppercase">{selectedTier}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">Models Available</span>
-                <span class="text-gray-800 font-medium">{selectedTier === 'pro' ? '5' : '1'}</span>
-              </div>
+          
+          <!-- Main Progress Area -->
+          <div class="flex-1 flex flex-col justify-center items-center px-6">
+                      <!-- Progress Bar -->
+          <div class="w-full max-w-4xl mb-8" role="region" aria-label="Analysis progress">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xl font-lcars text-lcars-cyan">ANALYSIS PROGRESS</span>
+              <span class="text-xl font-lcars text-lcars-cyan">{Math.round(analysisProgress)}%</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Analysis Progress/Results -->
-      {#if isAnalyzing || analysisResults}
-        <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-          <div class="lcars-card-header h-4 bg-lcars-pink"></div>
-          <div class="lcars-card-body p-6">
-            <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-gray-800">
-              {isAnalyzing ? 'Analysis in Progress' : 'Analysis Complete'}
-            </h2>
             
-            {#if isAnalyzing}
-              <div class="space-y-4">
-                <div class="flex items-center gap-3">
-                  <div class="animate-spin h-5 w-5 border-2 border-lcars-cyan border-t-transparent rounded-full"></div>
-                  <span class="text-gray-700">Status: {analysisStatus}</span>
+            <!-- LCARS Progress Bar -->
+            <div 
+              class="relative h-8 bg-gray-700 rounded-full overflow-hidden border-2 border-lcars-cyan"
+              role="progressbar"
+              aria-valuenow={Math.round(analysisProgress)}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label="Analysis completion progress"
+            >
+              <div 
+                class="absolute top-0 left-0 h-full bg-gradient-to-r from-lcars-cyan to-lcars-purple transition-all duration-500 ease-out rounded-full"
+                style="width: {analysisProgress}%"
+              ></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="text-sm font-lcars font-bold text-white drop-shadow">
+                  {Math.round(analysisProgress)}% COMPLETE
                 </div>
-                
-                {#if streamingContent}
-                  <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border border-gray-200">
-                    <h3 class="text-sm font-medium mb-2 text-gray-600">Live Stream (Gemini Flash)</h3>
-                    <pre class="whitespace-pre-wrap text-sm text-gray-800 font-mono">{streamingContent}</pre>
+              </div>
+            </div>
+              
+              <!-- Status Information -->
+              <div class="flex items-center justify-between mt-4 text-sm">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-lcars-cyan animate-pulse"></div>
+                  <span class="font-lcars uppercase">{analysisStatus}</span>
+                </div>
+                <span class="text-gray-400">Est. Time: {estimatedTime}</span>
+              </div>
+            </div>
+            
+            <!-- Live Summary Card -->
+            {#if analysisSummary}
+              <div class="w-full max-w-4xl mb-8">
+                <div class="lcars-card bg-black/40 rounded-lg overflow-hidden border border-lcars-cyan">
+                  <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
+                  <div class="lcars-card-body p-6">
+                    <h3 class="text-xl font-lcars font-bold mb-4 text-lcars-cyan">ANALYSIS SUMMARY</h3>
+                    <p class="text-lg leading-relaxed text-white">{analysisSummary}</p>
                   </div>
-                {/if}
+                </div>
               </div>
             {/if}
             
-            {#if analysisResults}
-              <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-lg font-medium text-gray-800">Analysis Complete</h3>
-                  <div class="flex gap-2">
-                    <button
-                      on:click={() => downloadReport('markdown')}
-                      class="lcars-button px-4 py-2 bg-lcars-cyan text-white rounded-sm text-sm hover:bg-lcars-purple"
+            <!-- Model Status Indicators -->
+            {#if Object.keys(modelStatuses).length > 0}
+              <div class="w-full max-w-4xl" role="region" aria-label="AI Model status indicators">
+                <h3 class="text-xl font-lcars font-bold mb-4 text-lcars-cyan">MODEL STATUS</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list">
+                  {#each Object.entries(modelStatuses) as [modelName, status]}
+                    <div 
+                      class="flex items-center gap-3 p-4 bg-black/40 rounded-lg border border-gray-600"
+                      role="listitem"
+                      aria-label={`${getModelDisplayName(modelName)} status: ${status}`}
                     >
-                      Download MD
-                    </button>
-                    <button
-                      on:click={() => downloadReport('json')}
-                      class="lcars-button px-4 py-2 bg-lcars-cyan text-white rounded-sm text-sm hover:bg-lcars-purple"
-                    >
-                      Download JSON
-                    </button>
-                  </div>
+                      <div 
+                        class="w-4 h-4 rounded-full {getStatusColor(status)} {status === 'processing' ? 'animate-pulse' : ''}"
+                        aria-hidden="true"
+                      ></div>
+                      <div class="flex-1">
+                        <div class="font-lcars font-bold text-white">{getModelDisplayName(modelName)}</div>
+                        <div class="text-sm text-gray-400 uppercase" aria-label="Status">{status}</div>
+                      </div>
+                    </div>
+                  {/each}
                 </div>
+              </div>
+            {/if}
+          </div>
+          
+          <!-- Footer -->
+          <div class="p-6 bg-black/20 text-center">
+            <div class="text-sm text-gray-400">
+              Multi-LLM Analysis Engine • {selectedTier.toUpperCase()} Tier • Case ID: {analysisId}
+            </div>
+          </div>
+        </div>
+      {:else}
+        <!-- Analysis Panel -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <!-- Upload Section -->
+          <div class="lg:col-span-2">
+            <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
+              <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
+              <div class="lcars-card-body p-6">
+                <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-gray-800">Evidence Upload</h2>
                 
-                <!-- Summary -->
-                {#if analysisResults.synthesis}
-                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <h4 class="font-medium mb-2 text-gray-800">Summary</h4>
-                    <p class="text-sm text-gray-700">{analysisResults.synthesis.summary}</p>
-                    <div class="mt-2 text-sm text-gray-600">
-                      Confidence Score: {analysisResults.synthesis.confidenceScore.toFixed(1)}%
+                <div class="space-y-4">
+                  <!-- File Upload -->
+                  <div>
+                    <label for="file-upload" class="block text-sm font-medium mb-2 text-gray-700">Evidence Files</label>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      on:change={handleFileSelect}
+                      class="w-full p-3 bg-gray-50 rounded-lg border border-gray-300 focus:border-lcars-cyan focus:outline-none text-gray-800"
+                      accept=".json,.xml,.csv,.log,.txt,.evtx"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Supported: M365 logs, audit trails, MSDE packages, event logs</p>
+                  </div>
+                  
+                  <!-- Context Input -->
+                  <div>
+                    <label for="context" class="block text-sm font-medium mb-2 text-gray-700">Analysis Context</label>
+                    <textarea
+                      id="context"
+                      bind:value={context}
+                      placeholder="Provide additional context for the analysis..."
+                      class="w-full p-3 bg-gray-50 rounded-lg border border-gray-300 focus:border-lcars-cyan focus:outline-none h-24 resize-none text-gray-800"
+                    ></textarea>
+                  </div>
+                  
+                  <!-- Tier Selection -->
+                  <div>
+                    <span class="block text-sm font-medium mb-2 text-gray-700">Analysis Tier</span>
+                    <div class="flex gap-4">
+                      <label class="flex items-center text-gray-700">
+                        <input type="radio" bind:group={selectedTier} value="free" class="mr-2" />
+                        <span>Free (1 model)</span>
+                      </label>
+                      <label class="flex items-center text-gray-700">
+                        <input type="radio" bind:group={selectedTier} value="pro" class="mr-2" />
+                        <span>Pro (5 models)</span>
+                      </label>
                     </div>
                   </div>
                   
-                  <!-- Consensus Findings -->
-                  {#if analysisResults.synthesis.consensusFindings.length > 0}
-                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <h4 class="font-medium mb-3 text-gray-800">Consensus Findings</h4>
-                      <div class="space-y-3">
-                        {#each analysisResults.synthesis.consensusFindings as finding}
-                          <div class="border-l-4 border-{finding.severity === 'critical' ? 'red' : finding.severity === 'high' ? 'orange' : finding.severity === 'medium' ? 'yellow' : 'green'}-500 pl-4">
-                            <div class="flex items-center gap-2 mb-1">
-                              <span class="text-sm font-medium text-gray-800">{finding.category}</span>
-                              <span class="text-xs px-2 py-1 bg-gray-200 rounded-full text-gray-700">{finding.severity}</span>
-                            </div>
-                            <p class="text-sm text-gray-600">{finding.description}</p>
-                          </div>
-                        {/each}
-                      </div>
-                    </div>
-                  {/if}
-                {/if}
+                  <!-- Analyze Button -->
+                  <button
+                    on:click={startAnalysis}
+                    disabled={!files}
+                    class="lcars-button inline-block px-5 py-2 bg-lcars-cyan rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 border-0 text-lcars-text hover:bg-lcars-purple hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Start Analysis
+                  </button>
+                </div>
                 
-                <!-- Model Artifacts -->
-                {#if analysisResults.artifacts}
-                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <h4 class="font-medium mb-3 text-gray-800">Model Analysis</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {#each analysisResults.artifacts as artifact}
-                        <div class="bg-white rounded p-3 border border-gray-300">
-                          <div class="text-sm font-medium mb-1 text-gray-800">{artifact.modelName}</div>
-                          <div class="text-xs text-gray-600">
-                            Findings: {artifact.findings.length} | 
-                            Confidence: {artifact.confidence}% | 
-                            Time: {artifact.processingTime}ms
-                          </div>
-                        </div>
-                      {/each}
-                    </div>
+                {#if error}
+                  <div class="mt-4 p-3 bg-red-100 border border-red-400 rounded-lg text-red-700">
+                    {error}
                   </div>
                 {/if}
               </div>
-            {/if}
+            </div>
+          </div>
+
+          <!-- Status Panel -->
+          <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
+            <div class="lcars-card-header h-4 bg-lcars-purple"></div>
+            <div class="lcars-card-body p-6">
+              <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-gray-800">System Status</h2>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600">API Status</span>
+                  <span class="text-green-600 font-medium">ONLINE</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600">Analysis Tier</span>
+                  <span class="text-lcars-cyan font-medium uppercase">{selectedTier}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600">Models Available</span>
+                  <span class="text-gray-800 font-medium">{selectedTier === 'pro' ? '5' : '1'}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       {/if}

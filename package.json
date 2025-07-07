@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "eventsource": "^4.0.0",
     "light-my-request": "^6.6.0"
   },
   "scripts": {
@@ -44,7 +45,7 @@
   "workspaces": ["api", "frontend"],
   "dependencies": {
     "@fastify/jwt": "8",
-    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/rate-limit": "7",
     "form-data": "^4.0.3"
   }
 }

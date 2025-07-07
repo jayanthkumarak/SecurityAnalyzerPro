@@ -20,6 +20,7 @@ export interface AnalysisRequest {
   context: string;
   priority: 'speed' | 'quality' | 'cost';
   caseId: string;
+  userId: string;
 }
 
 export interface AnalysisArtifact {

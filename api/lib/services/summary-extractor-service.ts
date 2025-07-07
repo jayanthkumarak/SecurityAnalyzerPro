@@ -1,7 +1,7 @@
 export class SummaryExtractorService {
     // This service will extract topmost summaries from model streams.
     // It will intelligently select and format key information for the loading screen.
-    private currentSummary: string = "Initiating analysis...";
+    private summaries: Map<string, string> = new Map();
     private onSummaryUpdate: (caseId: string, summary: string) => void;
 
     constructor(onSummaryUpdate: (caseId: string, summary: string) => void) {
@@ -14,20 +14,22 @@ export class SummaryExtractorService {
     }
 
     // New method to process chunks and update the live summary
-    processStreamChunk(modelName: string, chunk: string): string {
-        const newContent = ` ${modelName}: ${chunk}`; // Simple aggregation for now
-        this.currentSummary += newContent;
-        if (this.currentSummary.length > 1000) {
-            this.currentSummary = "..." + this.currentSummary.slice(this.currentSummary.length - 997);
+    processStreamChunk(caseId: string, modelName: string, chunk: string): string {
+        let current = this.summaries.get(caseId) || "Initiating analysis...";
+        const newContent = ` ${modelName}: ${chunk}`;
+        current += newContent;
+        if (current.length > 1000) {
+            current = "..." + current.slice(current.length - 997);
         }
-        return this.currentSummary;
+        this.summaries.set(caseId, current);
+        return current;
     }
 
-    getCurrentSummary(): string {
-        return this.currentSummary;
+    getCurrentSummary(caseId: string): string {
+        return this.summaries.get(caseId) || "Initiating analysis...";
     }
 
-    resetSummary(): void {
-        this.currentSummary = "Initiating analysis...";
+    resetSummary(caseId: string): void {
+        this.summaries.set(caseId, "Initiating analysis...");
     }
 } 
