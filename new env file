@@ -1,0 +1,5 @@
+OPENROUTER_API_KEY=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
+PORT=4000
+SITE_URL=http://localhost:5173
+JWT_SECRET=dev_jwt_secret_key_that_should_be_changed_in_production
+ANALYSIS_TIER=free

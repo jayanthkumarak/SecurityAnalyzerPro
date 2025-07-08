@@ -179,4 +179,6 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
-.nfs*
+.nfs*api/data/staged-artifacts/
+api/data/artifacts.db
+api/data/artifacts/

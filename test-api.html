@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>ForensicAnalyzerPro API Test</h1>
+    <div id="status">Testing...</div>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                // Test health endpoint
+                statusDiv.textContent = 'Testing health endpoint...';
+                const healthResponse = await fetch('http://localhost:4000/health');
+                const healthData = await healthResponse.json();
+                console.log('Health response:', healthData);
+                
+                // Test analyze endpoint
+                statusDiv.textContent = 'Testing analyze endpoint...';
+                const formData = new FormData();
+                formData.append('files', new Blob(['{"test": "data"}'], {type: 'application/json'}), 'test.json');
+                formData.append('context', 'Test analysis');
+                
+                const analyzeResponse = await fetch('http://localhost:4000/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (analyzeResponse.ok) {
+                    const analyzeData = await analyzeResponse.json();
+                    console.log('Analyze response:', analyzeData);
+                    statusDiv.textContent = '✅ API is working!';
+                    resultDiv.innerHTML = `<pre>${JSON.stringify(analyzeData, null, 2)}</pre>`;
+                } else {
+                    const errorText = await analyzeResponse.text();
+                    statusDiv.textContent = '❌ Analyze endpoint failed';
+                    resultDiv.innerHTML = `<pre>Status: ${analyzeResponse.status}\nError: ${errorText}</pre>`;
+                }
+            } catch (error) {
+                statusDiv.textContent = '❌ Connection failed';
+                resultDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+                console.error('Test failed:', error);
+            }
+        }
+        
+        testAPI();
+    </script>
+</body>
+</html> 

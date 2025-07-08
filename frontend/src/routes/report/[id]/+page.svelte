@@ -1,17 +1,27 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  let chartRefs: HTMLCanvasElement[] = [];
+  let chartInstances: any[] = [];
   
   // Get analysis ID from URL params
   $: analysisId = $page.params.id;
+  
+  // Reactive statement to render HTML content when it changes
+  $: if (richHTMLContent && richHTMLContainer) {
+    richHTMLContainer.innerHTML = richHTMLContent;
+  }
   
   // State management
   let loading = true;
   let error = '';
   let analysisResults: any = null;
   let richMediaReport: any = null;
-  let executiveSummary = '';
+  let executiveNarrative = '';
+  let analysisStatus = 'checking';
+  let richHTMLContent = '';
+  let richHTMLContainer: HTMLElement;
   
   // Stardate calculation
   let stardate = '';
@@ -35,6 +45,17 @@
     stardate = `${year}.${dayOfYear} • ${time}`;
   }
 
+  function getModelLabel(modelName: string): string {
+    const modelMap: { [key: string]: string } = {
+      'google/gemini-2.5-flash': 'Model A',
+      'google/gemini-2.5-pro': 'Model B', 
+      'openai/gpt-4.1': 'Model C',
+      'anthropic/claude-sonnet-4': 'Model D',
+      'deepseek/deepseek-chat': 'Model E'
+    };
+    return modelMap[modelName] || modelName;
+  }
+
   onMount(() => {
     updateStardate();
     const interval = setInterval(updateStardate, 1000);
@@ -53,7 +74,22 @@
   
   async function fetchAnalysisResults() {
     try {
-      // Fetch main analysis results
+      // First check if analysis is completed
+      const statusResponse = await fetch(`http://localhost:4000/analysis/${analysisId}/status`);
+      if (!statusResponse.ok) {
+        throw new Error('Failed to fetch analysis status');
+      }
+      
+      const status = await statusResponse.json();
+      
+      if (status.status !== 'completed') {
+        // Analysis still in progress, poll again in 5 seconds
+        analysisStatus = status.status;
+        setTimeout(fetchAnalysisResults, 5000);
+        return;
+      }
+      
+      // Analysis completed, fetch all results
       const resultsResponse = await fetch(`http://localhost:4000/analysis/${analysisId}/results`);
       if (!resultsResponse.ok) {
         throw new Error('Failed to fetch analysis results');
@@ -66,8 +102,23 @@
         richMediaReport = await richMediaResponse.json();
       }
       
-      // Generate executive summary from highest quality model
-      generateExecutiveSummary();
+      // Fetch executive narrative
+      const executiveResponse = await fetch(`http://localhost:4000/analysis/${analysisId}/executive-report`);
+      if (executiveResponse.ok) {
+        const executiveData = await executiveResponse.json();
+        executiveNarrative = executiveData.executiveNarrative;
+      }
+      
+      // Set rich HTML content if available
+      if (analysisResults?.synthesis?.finalReport) {
+        richHTMLContent = analysisResults.synthesis.finalReport;
+        // Render HTML content after the next tick
+        setTimeout(() => {
+          if (richHTMLContainer) {
+            richHTMLContainer.innerHTML = richHTMLContent;
+          }
+        }, 0);
+      }
       
     } catch (err) {
       console.error('Failed to fetch analysis results:', err);
@@ -91,53 +142,45 @@
     }
   }
   
-  function generateExecutiveSummary() {
-    if (!analysisResults?.synthesis) return;
-    
-    const { synthesis } = analysisResults;
-    const criticalFindings = synthesis.consensusFindings?.filter((f: any) => f.severity === 'critical').length || 0;
-    const highFindings = synthesis.consensusFindings?.filter((f: any) => f.severity === 'high').length || 0;
-    const totalFindings = synthesis.consensusFindings?.length || 0;
-    
-    executiveSummary = `Forensic analysis completed with ${synthesis.confidenceScore.toFixed(1)}% confidence. ` +
-      `${totalFindings} consensus findings identified across multiple AI models. ` +
-      `${criticalFindings} critical and ${highFindings} high-priority issues require immediate attention. ` +
-      `Analysis conducted using ${analysisResults.artifacts?.length || 0} AI models for comprehensive coverage.`;
-  }
-  
-  async function downloadReport(format: 'markdown' | 'json') {
+  async function downloadPDF() {
     try {
-      const response = await fetch(`http://localhost:4000/analysis/${analysisId}/report?format=${format}`);
+      // First check if analysis is completed
+      const statusResponse = await fetch(`http://localhost:4000/analysis/${analysisId}/status`);
+      if (!statusResponse.ok) {
+        throw new Error('Failed to check analysis status');
+      }
+      
+      const status = await statusResponse.json();
+      if (status.status !== 'completed') {
+        alert('Analysis is still in progress. Please wait for completion before downloading the PDF.');
+        return;
+      }
+      
+      const response = await fetch(`http://localhost:4000/analysis/${analysisId}/report.pdf`);
       
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status} ${response.statusText}`);
       }
       
-      const content = format === 'json' ? await response.json() : await response.text();
-      
-      const blob = new Blob([format === 'json' ? JSON.stringify(content, null, 2) : content], {
-        type: format === 'json' ? 'application/json' : 'text/markdown'
-      });
-      
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `forensic-report-${analysisId}.${format === 'json' ? 'json' : 'md'}`;
+      a.download = `forensic-report-${analysisId}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       
-      // Show success feedback (could be a toast notification in a real app)
-      console.log(`Report downloaded successfully as ${format.toUpperCase()}`);
+      // Show success feedback
+      console.log('PDF report downloaded successfully');
       
     } catch (err) {
       console.error('Download failed:', err);
       
-      // Show user-friendly error message (in a real app, this would be a toast or modal)
       const errorMessage = err instanceof Error 
-        ? `Failed to download report: ${err.message}` 
-        : 'An unexpected error occurred while downloading the report';
+        ? `Failed to download PDF: ${err.message}` 
+        : 'An unexpected error occurred while downloading the PDF';
       
-      alert(errorMessage); // In production, replace with proper error notification
+      alert(errorMessage);
     }
   }
   
@@ -160,297 +203,275 @@
       default: return 'text-gray-700';
     }
   }
+
+  function setChartRef(idx: number, el: HTMLCanvasElement) {
+    chartRefs[idx] = el;
+  }
+
+  afterUpdate(() => {
+    if (richMediaReport?.charts?.length > 0) {
+      richMediaReport.charts.forEach((chart: any, idx: number) => {
+        if (chartRefs[idx] && typeof chartRefs[idx].getContext === 'function') {
+          if (chartInstances[idx]) {
+            chartInstances[idx].destroy();
+          }
+          if ((window as any).Chart) {
+            if (chart.type === 'bar') {
+              chartInstances[idx] = new (window as any).Chart(chartRefs[idx].getContext('2d'), {
+                type: 'bar',
+                data: {
+                  labels: chart.data.map((d: any) => d.model),
+                  datasets: [{
+                    label: 'Confidence',
+                    data: chart.data.map((d: any) => d.confidence),
+                    backgroundColor: '#2563EB',
+                  }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+              });
+            } else if (chart.type === 'pie') {
+              chartInstances[idx] = new (window as any).Chart(chartRefs[idx].getContext('2d'), {
+                type: 'pie',
+                data: {
+                  labels: Object.keys(chart.data),
+                  datasets: [{
+                    data: Object.values(chart.data),
+                    backgroundColor: ['#10B981', '#F59E0B', '#F97316', '#EF4444'],
+                  }]
+                },
+                options: { responsive: true }
+              });
+            }
+          }
+        }
+      });
+    }
+  });
 </script>
 
 <svelte:head>
   <title>Forensic Analysis Report - {analysisId}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </svelte:head>
 
-<div class="lcars-container font-sans bg-lcars-bg min-h-screen text-lcars-text">
-  <header class="lcars-header flex mb-8 items-stretch h-20">
-    <div class="lcars-title-block bg-lcars-cyan rounded-lg px-6 py-4 mr-4 flex items-center w-72">
-      <span class="lcars-title font-lcars font-bold text-2xl tracking-wide">ForensicAnalyzerPro</span>
-    </div>
-    <div class="lcars-header-bar flex flex-grow gap-4">
-      <div class="lcars-pill lcars-pill-lg bg-lcars-pink rounded-lg flex-grow"></div>
-      <div class="lcars-pill lcars-pill-sm bg-lcars-cyan rounded-lg w-20"></div>
-      <div class="lcars-pill lcars-pill-lg bg-lcars-purple rounded-lg flex-grow"></div>
-      <div class="lcars-pill lcars-pill-sm bg-lcars-pink rounded-lg w-20"></div>
-    </div>
-  </header>
-
-  <!-- Navigation -->
-  <nav class="lcars-nav flex mb-8 gap-4" role="navigation" aria-label="Report navigation">
+<div class="card">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Forensic Analysis Report</h1>
     <button
-      on:click={() => goto('/')}
-      class="lcars-nav-item px-5 py-3 bg-white rounded-sm font-lcars font-bold cursor-pointer transition-all duration-200 shadow hover:bg-lcars-cyan hover:-translate-y-0.5"
-      aria-label="Return to analysis page"
+      on:click={downloadPDF}
+      class="button"
     >
-      ← Back to Analysis
+      Download PDF
     </button>
-    <div 
-      class="lcars-nav-item px-5 py-3 bg-lcars-cyan rounded-sm font-lcars font-bold -translate-y-0.5"
-      role="heading"
-      aria-level="2"
-    >
-      Analysis Report
-    </div>
-  </nav>
-
-  <main class="lcars-main">
-    {#if loading}
-      <!-- Loading State -->
-      <div class="flex items-center justify-center min-h-96">
-        <div class="text-center">
-          <div class="animate-spin h-12 w-12 border-4 border-lcars-cyan border-t-transparent rounded-full mx-auto mb-4"></div>
-          <div class="text-xl font-lcars text-lcars-cyan">Loading Analysis Report...</div>
-        </div>
-      </div>
-    {:else if error}
-      <!-- Error State -->
-      <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-        <div class="lcars-card-header h-4 bg-red-500"></div>
-        <div class="lcars-card-body p-6">
-          <h2 class="lcars-card-title font-lcars font-bold text-xl mb-4 text-red-600">Error Loading Report</h2>
-          <p class="text-gray-700">{error}</p>
-          <button
-            on:click={() => goto('/')}
-            class="mt-4 lcars-button px-4 py-2 bg-lcars-cyan text-white rounded-sm hover:bg-lcars-purple"
-          >
-            Return to Analysis
-          </button>
-        </div>
-      </div>
-    {:else}
-      <!-- Report Content -->
-      <div class="space-y-6">
-        <!-- Report Header -->
-        <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-          <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
-          <div class="lcars-card-body p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h1 class="text-3xl font-lcars font-bold text-gray-800">Forensic Analysis Report</h1>
-              <div class="flex gap-2" role="group" aria-label="Report download options">
-                <button
-                  on:click={() => downloadReport('markdown')}
-                  class="lcars-button px-4 py-2 bg-lcars-cyan text-white rounded-sm text-sm hover:bg-lcars-purple"
-                  aria-label="Download report as Markdown file"
-                >
-                  Download MD
-                </button>
-                <button
-                  on:click={() => downloadReport('json')}
-                  class="lcars-button px-4 py-2 bg-lcars-cyan text-white rounded-sm text-sm hover:bg-lcars-purple"
-                  aria-label="Download report as JSON file"
-                >
-                  Download JSON
-                </button>
-              </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span class="text-gray-600">Case ID:</span>
-                <span class="font-mono text-gray-800 ml-2">{analysisId}</span>
-              </div>
-              <div>
-                <span class="text-gray-600">Generated:</span>
-                <span class="text-gray-800 ml-2">{new Date(analysisResults?.completedAt || Date.now()).toLocaleString()}</span>
-              </div>
-              <div>
-                <span class="text-gray-600">Stardate:</span>
-                <span class="text-gray-800 ml-2">{stardate}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Executive Summary -->
-        {#if executiveSummary}
-          <div class="lcars-card bg-gradient-to-r from-lcars-cyan to-lcars-purple text-white rounded-lg overflow-hidden shadow-lg">
-            <div class="p-6">
-              <h2 class="text-2xl font-lcars font-bold mb-4">EXECUTIVE SUMMARY</h2>
-              <p class="text-lg leading-relaxed">{executiveSummary}</p>
-            </div>
-          </div>
-        {/if}
-        
-        <!-- Analysis Overview -->
-        {#if richMediaReport?.summary}
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-              <div class="lcars-card-header h-4 bg-lcars-pink"></div>
-              <div class="lcars-card-body p-4 text-center">
-                <div class="text-2xl font-lcars font-bold text-gray-800">{richMediaReport.summary.totalModels}</div>
-                <div class="text-sm text-gray-600">Models Used</div>
-              </div>
-            </div>
-            
-            <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-              <div class="lcars-card-header h-4 bg-lcars-cyan"></div>
-              <div class="lcars-card-body p-4 text-center">
-                <div class="text-2xl font-lcars font-bold text-gray-800">{richMediaReport.summary.averageConfidence.toFixed(1)}%</div>
-                <div class="text-sm text-gray-600">Avg Confidence</div>
-              </div>
-            </div>
-            
-            <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-              <div class="lcars-card-header h-4 bg-lcars-purple"></div>
-              <div class="lcars-card-body p-4 text-center">
-                <div class="text-2xl font-lcars font-bold text-gray-800">{richMediaReport.summary.totalFindings}</div>
-                <div class="text-sm text-gray-600">Total Findings</div>
-              </div>
-            </div>
-            
-            <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-              <div class="lcars-card-header h-4 bg-lcars-yellow"></div>
-              <div class="lcars-card-body p-4 text-center">
-                <div class="text-2xl font-lcars font-bold text-gray-800 uppercase">{richMediaReport.summary.highestSeverity}</div>
-                <div class="text-sm text-gray-600">Highest Severity</div>
-              </div>
-            </div>
-          </div>
-        {/if}
-        
-        <!-- Consensus Findings -->
-        {#if analysisResults?.synthesis?.consensusFindings?.length > 0}
-          <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-            <div class="lcars-card-header h-4 bg-lcars-pink"></div>
-            <div class="lcars-card-body p-6">
-              <h2 class="text-2xl font-lcars font-bold mb-6 text-gray-800">CONSENSUS FINDINGS</h2>
-              <div class="space-y-4">
-                {#each analysisResults.synthesis.consensusFindings as finding}
-                  <div class="border-l-4 {getSeverityColor(finding.severity)} border rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-2">
-                      <h3 class="text-lg font-semibold text-gray-800">{finding.category}</h3>
-                      <span class="px-3 py-1 text-xs font-bold rounded-full uppercase {getSeverityTextColor(finding.severity)} bg-white border">
-                        {finding.severity}
-                      </span>
-                    </div>
-                    <p class="text-gray-700 mb-3">{finding.description}</p>
-                    
-                    {#if finding.evidence?.length > 0}
-                      <div class="mb-3">
-                        <h4 class="text-sm font-semibold text-gray-600 mb-1">Evidence:</h4>
-                        <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
-                          {#each finding.evidence as evidence}
-                            <li>{evidence}</li>
-                          {/each}
-                        </ul>
-                      </div>
-                    {/if}
-                    
-                    {#if finding.recommendations?.length > 0}
-                      <div>
-                        <h4 class="text-sm font-semibold text-gray-600 mb-1">Recommendations:</h4>
-                        <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
-                          {#each finding.recommendations as recommendation}
-                            <li>{recommendation}</li>
-                          {/each}
-                        </ul>
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            </div>
-          </div>
-        {/if}
-        
-        <!-- Model Analysis Breakdown -->
-        {#if analysisResults?.artifacts?.length > 0}
-          <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-            <div class="lcars-card-header h-4 bg-lcars-purple"></div>
-            <div class="lcars-card-body p-6">
-              <h2 class="text-2xl font-lcars font-bold mb-6 text-gray-800">MODEL ANALYSIS BREAKDOWN</h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {#each analysisResults.artifacts as artifact}
-                  <div class="border border-gray-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-3">
-                      <h3 class="text-lg font-semibold text-gray-800">{artifact.modelName}</h3>
-                      <span class="text-sm text-gray-600">{artifact.confidence}% confidence</span>
-                    </div>
-                    
-                    <div class="grid grid-cols-3 gap-2 text-sm">
-                      <div class="text-center">
-                        <div class="font-bold text-gray-800">{artifact.findings.length}</div>
-                        <div class="text-gray-600">Findings</div>
-                      </div>
-                      <div class="text-center">
-                        <div class="font-bold text-gray-800">{artifact.processingTime}ms</div>
-                        <div class="text-gray-600">Time</div>
-                      </div>
-                      <div class="text-center">
-                        <div class="font-bold text-gray-800">{artifact.tokenUsage}</div>
-                        <div class="text-gray-600">Tokens</div>
-                      </div>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          </div>
-        {/if}
-        
-        <!-- Rich Media Charts -->
-        {#if richMediaReport?.charts?.length > 0}
-          <div class="lcars-card bg-white rounded-lg overflow-hidden shadow">
-            <div class="lcars-card-header h-4 bg-lcars-yellow"></div>
-            <div class="lcars-card-body p-6">
-              <h2 class="text-2xl font-lcars font-bold mb-6 text-gray-800">ANALYSIS CHARTS</h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {#each richMediaReport.charts as chart}
-                  <div class="bg-gray-50 rounded-lg p-4">
-                    <h3 class="text-lg font-semibold mb-3 text-gray-800">{chart.title}</h3>
-                    <div class="text-sm text-gray-600">
-                      Chart Type: {chart.type}
-                    </div>
-                    <!-- Note: In a real implementation, you'd render actual charts here -->
-                    <div class="mt-3 p-4 bg-white rounded border text-xs">
-                      <pre>{JSON.stringify(chart.data, null, 2)}</pre>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </main>
-
-  <div class="lcars-status flex items-center justify-center font-lcars text-sm mt-8">
-    <div class="lcars-status-indicator w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-    <span>System Online • Stardate {stardate}</span>
   </div>
-
-  <footer class="lcars-footer flex mt-10 items-stretch h-16">
-    <div class="lcars-header-bar flex flex-grow gap-4">
-      <div class="lcars-pill lcars-pill-lg bg-lcars-pink rounded-lg flex-grow"></div>
-      <div class="lcars-pill lcars-pill-sm bg-lcars-cyan rounded-lg w-20"></div>
-      <div class="lcars-pill lcars-pill-lg bg-lcars-purple rounded-lg flex-grow"></div>
-      <div class="lcars-pill lcars-pill-sm bg-lcars-pink rounded-lg w-20"></div>
+  
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-6">
+    <div>
+      <span class="text-gray-600">Case ID:</span>
+      <span class="font-mono text-gray-800 ml-2">{analysisId}</span>
     </div>
-  </footer>
+    <div>
+      <span class="text-gray-600">Generated:</span>
+      <span class="text-gray-800 ml-2">{new Date(analysisResults?.completedAt || Date.now()).toLocaleString()}</span>
+    </div>
+    <div>
+      <span class="text-gray-600">Stardate:</span>
+      <span class="text-gray-800 ml-2">{stardate}</span>
+    </div>
+  </div>
 </div>
 
+{#if loading}
+  <div class="card">
+    <div class="text-center">
+      <div class="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+      <div class="text-xl font-semibold text-gray-800">
+        {analysisStatus === 'checking' ? 'Loading Analysis Report...' : 
+         analysisStatus === 'processing' ? 'Analysis in Progress...' :
+         analysisStatus === 'started' ? 'Analysis Starting...' :
+         'Loading Analysis Report...'}
+      </div>
+      {#if analysisStatus !== 'checking'}
+        <div class="text-sm text-gray-600 mt-2">This may take 2-5 minutes. Please wait...</div>
+      {/if}
+    </div>
+  </div>
+{:else if error}
+  <div class="card">
+    <h2 class="text-xl font-bold mb-4 text-red-600">Error Loading Report</h2>
+    <p class="text-gray-700">{error}</p>
+    <button
+      on:click={() => goto('/')}
+      class="button mt-4"
+    >
+      Return to Analysis
+    </button>
+  </div>
+{:else}
+  <!-- Executive Narrative -->
+  {#if executiveNarrative}
+    <div class="card bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+      <h2 class="text-2xl font-bold mb-4">EXECUTIVE NARRATIVE</h2>
+      <div class="text-lg leading-relaxed whitespace-pre-wrap">{executiveNarrative}</div>
+    </div>
+  {/if}
+  
+  <!-- Analysis Overview -->
+  {#if richMediaReport?.summary}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div class="card">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-gray-800">{richMediaReport.summary.totalModels}</div>
+          <div class="text-sm text-gray-600">Models Used</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-gray-800">{richMediaReport.summary.averageConfidence.toFixed(1)}%</div>
+          <div class="text-sm text-gray-600">Avg Confidence</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-gray-800">{richMediaReport.summary.totalFindings}</div>
+          <div class="text-sm text-gray-600">Total Findings</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-gray-800 uppercase">{richMediaReport.summary.highestSeverity}</div>
+          <div class="text-sm text-gray-600">Highest Severity</div>
+        </div>
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Rich HTML Report Content -->
+  {#if richHTMLContent}
+    <div class="card">
+      <h2 class="text-2xl font-bold mb-6 text-gray-800">COMPREHENSIVE ANALYSIS REPORT</h2>
+      <div class="rich-html-content" bind:this={richHTMLContainer}></div>
+    </div>
+  {/if}
+  
+  <!-- Consensus Findings -->
+  {#if analysisResults?.synthesis?.consensusFindings?.length > 0}
+    <div class="card">
+      <h2 class="text-2xl font-bold mb-6 text-gray-800">CONSENSUS FINDINGS</h2>
+      <div class="space-y-4">
+        {#each analysisResults.synthesis.consensusFindings as finding}
+          <div class="border-l-4 {getSeverityColor(finding.severity)} border rounded-lg p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold text-gray-800">{finding.category}</h3>
+              <span class="px-3 py-1 text-xs font-bold rounded-full uppercase {getSeverityTextColor(finding.severity)} bg-white border">
+                {finding.severity}
+              </span>
+            </div>
+            <p class="text-gray-700 mb-3">{finding.description}</p>
+            
+            {#if finding.evidence?.length > 0}
+              <div class="mb-3">
+                <h4 class="text-sm font-semibold text-gray-600 mb-1">Evidence:</h4>
+                <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
+                  {#each finding.evidence as evidence}
+                    <li>{evidence}</li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+            
+            {#if finding.recommendations?.length > 0}
+              <div>
+                <h4 class="text-sm font-semibold text-gray-600 mb-1">Recommendations:</h4>
+                <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
+                  {#each finding.recommendations as recommendation}
+                    <li>{recommendation}</li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Model Analysis Breakdown -->
+  {#if analysisResults?.artifacts?.length > 0}
+    <div class="card">
+      <h2 class="text-2xl font-bold mb-6 text-gray-800">INTELLIGENCE TEAM ANALYSIS</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {#each analysisResults.artifacts as artifact}
+          <div class="border border-gray-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="model-label">{getModelLabel(artifact.modelName)}</span>
+                <span class="text-sm text-gray-600">{artifact.confidence}% confidence</span>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 text-sm">
+              <div class="text-center">
+                <div class="font-bold text-gray-800">{artifact.findings.length}</div>
+                <div class="text-gray-600">Findings</div>
+              </div>
+              <div class="text-center">
+                <div class="font-bold text-gray-800">{artifact.processingTime}ms</div>
+                <div class="text-gray-600">Time</div>
+              </div>
+              <div class="text-center">
+                <div class="font-bold text-gray-800">{artifact.tokenUsage}</div>
+                <div class="text-gray-600">Tokens</div>
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Rich Media Charts -->
+  {#if richMediaReport?.charts?.length > 0}
+    <div class="card">
+      <h2 class="text-2xl font-bold mb-6 text-gray-800">ANALYSIS CHARTS</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {#each richMediaReport.charts as chart, idx (idx)}
+          <div class="bg-gray-50 rounded-lg p-4">
+            <h3 class="text-lg font-semibold mb-3 text-gray-800">{chart.title}</h3>
+            <canvas bind:this={chartRefs[idx]} width="400" height="300"></canvas>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+{/if}
+
+<div class="text-sm text-gray-500 mt-8 text-center">System Online • Stardate {stardate}</div>
+
 <style>
-  /* Custom scrollbar for LCARS theme */
-  :global(.overflow-y-auto::-webkit-scrollbar) {
-    width: 8px;
+  .rich-html-content {
+    max-width: 100%;
+    overflow-x: auto;
   }
   
-  :global(.overflow-y-auto::-webkit-scrollbar-track) {
-    background: #e5e7eb;
-    border-radius: 4px;
+  .rich-html-content :global(.report-container) {
+    max-width: none;
+    box-shadow: none;
+    border-radius: 0;
   }
   
-  :global(.overflow-y-auto::-webkit-scrollbar-thumb) {
-    background: #9ca3af;
-    border-radius: 4px;
+  .rich-html-content :global(.report-header-main) {
+    display: none;
   }
   
-  :global(.overflow-y-auto::-webkit-scrollbar-thumb:hover) {
-    background: #6b7280;
+  .rich-html-content :global(.report-footer) {
+    display: none;
+  }
+  
+  .rich-html-content :global(.report-content) {
+    padding: 0;
   }
 </style> 

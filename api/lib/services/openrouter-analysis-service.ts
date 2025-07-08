@@ -1,9 +1,8 @@
 import OpenAI from 'openai';
 import { FileAnalysis } from './file-processing-service';
-import { StreamProcessorService } from './stream-processor-service';
-import { SummaryExtractorService } from './summary-extractor-service';
-import { DataStagingService } from './data-staging-service';
+import { SimpleStagingService } from './simple-staging-service';
 import { MediaGeneratorService } from './media-generator-service';
+import { ReportGenerationService } from './report-generation-service';
 
 export interface ModelConfig {
   name: string;
@@ -114,10 +113,9 @@ function getActiveModels(): ModelConfig[] {
 
 export class OpenRouterAnalysisService {
   private openRouterClient: OpenAI;
-  private streamProcessorService: StreamProcessorService;
-  private summaryExtractorService: SummaryExtractorService;
-  private dataStagingService: DataStagingService;
+  private stagingService: SimpleStagingService;
   private mediaGeneratorService: MediaGeneratorService;
+  private reportGenerationService: ReportGenerationService;
   private onSummaryUpdate: (caseId: string, summary: string) => void;
   private maxRetries = 3;
   private timeoutMs = 300000; // 5 minutes
@@ -125,17 +123,16 @@ export class OpenRouterAnalysisService {
   constructor(onSummaryUpdate: (caseId: string, summary: string) => void) {
     this.openRouterClient = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY,
+      apiKey: process.env.OPENROUTER_API_KEY || '',
       defaultHeaders: {
         "HTTP-Referer": process.env.SITE_URL || "http://localhost:3000",
         "X-Title": "ForensicAnalyzerPro",
       }
     });
     this.onSummaryUpdate = onSummaryUpdate;
-    this.streamProcessorService = new StreamProcessorService(onSummaryUpdate);
-    this.summaryExtractorService = new SummaryExtractorService(onSummaryUpdate);
-    this.dataStagingService = new DataStagingService();
+    this.stagingService = new SimpleStagingService();
     this.mediaGeneratorService = new MediaGeneratorService();
+    this.reportGenerationService = new ReportGenerationService();
   }
 
   async analyzeEvidence(request: AnalysisRequest): Promise<AnalysisArtifact[]> {
@@ -190,8 +187,8 @@ export class OpenRouterAnalysisService {
 
       const content = response.choices[0].message.content || '';
 
-      // Route the full model output through the StreamProcessorService
-      await this.streamProcessorService.processStaticOutput(model.name, content, request.caseId);
+      // Stage the result using the simplified staging service
+      await this.stagingService.stageResult(model.name, content, request.caseId);
 
       const findings = this.parseFindings(content);
       const confidence = this.calculateConfidence(findings, response);
@@ -213,39 +210,8 @@ export class OpenRouterAnalysisService {
     }
   }
 
-  async * analyzeWithModelStream(
-    model: ModelConfig, 
-    request: AnalysisRequest
-  ): AsyncGenerator<string, void, unknown> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-      const prompt = this.buildPrompt(model, request);
-      
-      const stream = await this.openRouterClient.chat.completions.create({
-        model: model.name,
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 4000,
-        temperature: 0.1,
-        stream: true,
-      }, { signal: controller.signal });
-
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        if (content) {
-          // Route each chunk through the StreamProcessorService
-          await this.streamProcessorService.processStreamChunk(model.name, content, request.caseId);
-          yield content;
-        }
-      }
-    } catch (error) {
-      console.error(`Error during streaming with ${model.name}:`, error);
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
+  // REMOVED: Streaming functionality - simplified to staging-only approach
+  // async * analyzeWithModelStream() method removed to reduce complexity
 
   private buildPrompt(model: ModelConfig, request: AnalysisRequest): string {
     const basePrompt = `
@@ -422,57 +388,193 @@ Provide thorough forensic analysis covering all aspects of the evidence.`;
   }
 
   async synthesizeAnalysis(artifacts: AnalysisArtifact[]): Promise<SynthesisResult> {
-    const consensusFindings: ForensicFinding[] = [];
-    const conflictingFindings: ConflictingFinding[] = [];
-    
-    // Group findings by category
-    const findingsByCategory = new Map<string, ForensicFinding[]>();
-    
-    artifacts.forEach(artifact => {
-      artifact.findings.forEach(finding => {
-        if (!findingsByCategory.has(finding.category)) {
-          findingsByCategory.set(finding.category, []);
-        }
-        findingsByCategory.get(finding.category)!.push(finding);
+    // Use Claude Sonnet 4 to synthesize all model outputs
+    try {
+      const prompt = `You are a senior forensic analyst tasked with synthesizing findings from multiple AI models into a comprehensive, professional report.
+
+ANALYSIS CONTEXT:
+You have received outputs from ${artifacts.length} different AI models analyzing the same forensic evidence. Your job is to:
+
+1. **Collate and Compare**: Review all model outputs and identify consensus vs. conflicting findings
+2. **Weigh and Measure**: Assess the reliability and confidence of each model's findings
+3. **Synthesize**: Create a final, authoritative report that represents the best analysis
+4. **Format Professionally**: Present findings in a clear, structured format suitable for legal/executive review
+
+MODEL OUTPUTS:
+${artifacts.map((artifact, index) => `
+MODEL ${index + 1}: ${artifact.modelName}
+Confidence: ${artifact.confidence}%
+Processing Time: ${artifact.processingTime}ms
+Token Usage: ${artifact.tokenUsage}
+
+FINDINGS:
+${artifact.findings.map(finding => `
+- Category: ${finding.category}
+- Severity: ${finding.severity.toUpperCase()}
+- Description: ${finding.description}
+- Evidence: ${finding.evidence.join('; ')}
+- Recommendations: ${finding.recommendations.join('; ')}
+`).join('\n')}
+
+RAW RESPONSE:
+${artifact.rawResponse}
+`).join('\n\n')}
+
+TASK:
+Create a comprehensive synthesis that includes:
+
+1. **Executive Summary** (2-3 paragraphs)
+   - High-level overview of findings
+   - Risk assessment and business impact
+   - Key recommendations for leadership
+
+2. **Consensus Findings** (detailed analysis)
+   - Findings that multiple models agree on
+   - Evidence and confidence levels
+   - Specific recommendations
+
+3. **Conflicting Analysis** (if any)
+   - Areas where models disagree
+   - Analysis of why conflicts exist
+   - Resolution recommendations
+
+4. **Technical Details**
+   - Model performance comparison
+   - Confidence scoring methodology
+   - Limitations and caveats
+
+5. **Recommendations**
+   - Immediate actions required
+   - Long-term strategic recommendations
+   - Risk mitigation strategies
+
+FORMAT THE OUTPUT AS A PROFESSIONAL FORENSIC REPORT with proper headings, bullet points, and structured sections. Use clear, authoritative language suitable for legal and executive review.
+
+Focus on creating actionable insights and clear risk assessments.`;
+
+      const response = await this.openRouterClient.chat.completions.create({
+        model: "anthropic/claude-sonnet-4",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 4000,
+        temperature: 0.2,
       });
-    });
+
+      const synthesizedReport = response.choices[0].message.content || 'Synthesis failed.';
+
+      // Parse the synthesized report to extract structured findings
+      const consensusFindings = this.extractConsensusFindings(synthesizedReport);
+      const conflictingFindings: ConflictingFinding[] = []; // Will be enhanced later
+      
+      // Calculate overall confidence
+      const avgConfidence = artifacts.reduce((sum, a) => sum + a.confidence, 0) / artifacts.length;
+      
+      return {
+        consensusFindings,
+        conflictingFindings,
+        confidenceScore: avgConfidence,
+        finalReport: synthesizedReport,
+        summary: this.generateSummary(consensusFindings)
+      };
+    } catch (error) {
+      console.error('Synthesis with Claude Sonnet 4 failed:', error);
+      
+      // Fallback to original synthesis method
+      const consensusFindings: ForensicFinding[] = [];
+      const conflictingFindings: ConflictingFinding[] = [];
+      
+      // Group findings by category
+      const findingsByCategory = new Map<string, ForensicFinding[]>();
+      
+      artifacts.forEach(artifact => {
+        artifact.findings.forEach(finding => {
+          if (!findingsByCategory.has(finding.category)) {
+            findingsByCategory.set(finding.category, []);
+          }
+          findingsByCategory.get(finding.category)!.push(finding);
+        });
+      });
+      
+      // Analyze consensus and conflicts
+      for (const [category, findings] of findingsByCategory) {
+        if (findings.length >= 2) {
+          // Check for consensus
+          const severityCounts = new Map<string, number>();
+          findings.forEach(f => {
+            severityCounts.set(f.severity, (severityCounts.get(f.severity) || 0) + 1);
+          });
+          
+          const mostCommonSeverity = Array.from(severityCounts.entries())
+            .sort((a, b) => b[1] - a[1])[0][0];
+          
+          // Create consensus finding
+          consensusFindings.push({
+            category,
+            severity: mostCommonSeverity as any,
+            description: findings[0].description,
+            evidence: [...new Set(findings.flatMap(f => f.evidence))],
+            recommendations: [...new Set(findings.flatMap(f => f.recommendations))]
+          });
+        }
+      }
+      
+      // Calculate overall confidence
+      const avgConfidence = artifacts.reduce((sum, a) => sum + a.confidence, 0) / artifacts.length;
+      
+      // Generate final report
+      const finalReport = await this.generateFinalReport(consensusFindings, conflictingFindings, artifacts);
+      
+      return {
+        consensusFindings,
+        conflictingFindings,
+        confidenceScore: avgConfidence,
+        finalReport,
+        summary: this.generateSummary(consensusFindings)
+      };
+    }
+  }
+
+  private extractConsensusFindings(synthesizedReport: string): ForensicFinding[] {
+    // Simple extraction - in production, you'd want more sophisticated parsing
+    const findings: ForensicFinding[] = [];
     
-    // Analyze consensus and conflicts
-    for (const [category, findings] of findingsByCategory) {
-      if (findings.length >= 2) {
-        // Check for consensus
-        const severityCounts = new Map<string, number>();
-        findings.forEach(f => {
-          severityCounts.set(f.severity, (severityCounts.get(f.severity) || 0) + 1);
-        });
-        
-        const mostCommonSeverity = Array.from(severityCounts.entries())
-          .sort((a, b) => b[1] - a[1])[0][0];
-        
-        // Create consensus finding
-        consensusFindings.push({
-          category,
-          severity: mostCommonSeverity as any,
-          description: findings[0].description,
-          evidence: [...new Set(findings.flatMap(f => f.evidence))],
-          recommendations: [...new Set(findings.flatMap(f => f.recommendations))]
-        });
+    // Look for patterns in the synthesized report
+    const severityPatterns = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const lines = synthesizedReport.split('\n');
+    
+    let currentFinding: Partial<ForensicFinding> = {};
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Look for severity indicators
+      const severity = severityPatterns.find(s => trimmedLine.includes(s));
+      if (severity) {
+        if (currentFinding.category && currentFinding.description) {
+          findings.push(currentFinding as ForensicFinding);
+        }
+        currentFinding = {
+          severity: severity.toLowerCase() as any,
+          evidence: [],
+          recommendations: []
+        };
+      }
+      
+      // Look for category patterns
+      if (trimmedLine.includes(':') && !trimmedLine.includes('http')) {
+        const parts = trimmedLine.split(':');
+        if (parts.length >= 2) {
+          currentFinding.category = parts[0].trim();
+          currentFinding.description = parts[1].trim();
+        }
       }
     }
     
-    // Calculate overall confidence
-    const avgConfidence = artifacts.reduce((sum, a) => sum + a.confidence, 0) / artifacts.length;
+    // Add the last finding if it exists
+    if (currentFinding.category && currentFinding.description) {
+      findings.push(currentFinding as ForensicFinding);
+    }
     
-    // Generate final report
-    const finalReport = await this.generateFinalReport(consensusFindings, conflictingFindings, artifacts);
-    
-    return {
-      consensusFindings,
-      conflictingFindings,
-      confidenceScore: avgConfidence,
-      finalReport,
-      summary: this.generateSummary(consensusFindings)
-    };
+    return findings;
   }
 
   private async generateFinalReport(
@@ -480,7 +582,8 @@ Provide thorough forensic analysis covering all aspects of the evidence.`;
     conflictingFindings: ConflictingFinding[],
     artifacts: AnalysisArtifact[]
   ): Promise<string> {
-    const report = `
+    // Generate rich HTML report instead of plain markdown
+    const markdownReport = `
 # Forensic Analysis Report
 
 ## Executive Summary
@@ -520,7 +623,13 @@ Based on the multi-model analysis, the evidence shows ${consensusFindings.length
 Generated by ForensicAnalyzerPro Multi-LLM Analysis Engine
 `;
 
-    return report;
+    // Convert to rich HTML
+    return await this.reportGenerationService.generateRichHTMLReport(markdownReport, {
+      includeCharts: true,
+      includeTimeline: true,
+      includeInteractiveElements: true,
+      theme: 'professional'
+    });
   }
 
   private generateSummary(findings: ForensicFinding[]): string {
@@ -542,5 +651,104 @@ Generated by ForensicAnalyzerPro Multi-LLM Analysis Engine
 
   public getMediaGeneratorService(): MediaGeneratorService {
     return this.mediaGeneratorService;
+  }
+
+  async generateExecutiveNarrative(artifacts: AnalysisArtifact[], synthesis: SynthesisResult): Promise<string> {
+    try {
+      const prompt = `You are a senior forensic analyst creating an executive-level narrative report for leadership.
+
+Based on the following forensic analysis results, create a compelling, high-level narrative that would be suitable for:
+- C-level executives
+- Board members
+- Non-technical stakeholders
+
+Focus on:
+1. Business impact and risk assessment
+2. Key findings that matter to leadership
+3. Strategic recommendations
+4. Clear, non-technical language
+5. Actionable insights
+
+Analysis Results:
+${artifacts.map(a => `
+Model: ${a.modelName}
+Findings: ${a.findings.map(f => `${f.category} (${f.severity}): ${f.description}`).join('; ')}
+`).join('\n')}
+
+Synthesis Summary:
+${synthesis.summary}
+
+Confidence Score: ${synthesis.confidenceScore}%
+
+Create a narrative that tells the story of what happened, why it matters, and what leadership should do about it.`;
+
+      const response = await this.openRouterClient.chat.completions.create({
+        model: "anthropic/claude-sonnet-4", // Use a high-quality model for executive narrative
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 2000,
+        temperature: 0.3,
+      });
+
+      return response.choices[0].message.content || 'Executive narrative generation failed.';
+    } catch (error) {
+      console.error('Executive narrative generation failed:', error);
+      return `Executive Summary: ${synthesis.summary}\n\nThis analysis identified ${synthesis.consensusFindings.length} key findings requiring leadership attention.`;
+    }
+  }
+
+  async generatePDFReport(artifacts: AnalysisArtifact[], synthesis: SynthesisResult): Promise<Buffer> {
+    try {
+      // Collect all findings from artifacts
+      const allFindings = artifacts.flatMap(artifact => artifact.findings);
+      
+      // Count findings by severity
+      const severityCounts = {
+        critical: allFindings.filter(f => f.severity === 'critical').length,
+        high: allFindings.filter(f => f.severity === 'high').length,
+        medium: allFindings.filter(f => f.severity === 'medium').length,
+        low: allFindings.filter(f => f.severity === 'low').length
+      };
+      
+      const totalFindings = allFindings.length;
+      
+      // For now, generate a simple text-based PDF
+      // In production, you'd use a proper PDF library like puppeteer or jsPDF
+      const reportContent = `
+FORENSIC ANALYSIS REPORT
+========================
+
+Executive Summary
+----------------
+Analysis completed with ${totalFindings} findings: ${severityCounts.critical} critical, ${severityCounts.high} high, ${severityCounts.medium} medium, ${severityCounts.low} low severity issues identified.
+
+Key Findings
+-----------
+${allFindings.map(f => `
+${f.category} (${f.severity.toUpperCase()})
+${f.description}
+
+Evidence:
+${f.evidence.map(e => `- ${e}`).join('\n')}
+
+Recommendations:
+${f.recommendations.map(r => `- ${r}`).join('\n')}
+`).join('\n')}
+
+Analysis Details
+---------------
+Models Used: ${artifacts.map(a => a.modelName).join(', ')}
+Confidence Score: ${synthesis.confidenceScore}%
+Processing Time: ${artifacts.reduce((sum, a) => sum + a.processingTime, 0)}ms
+
+Generated by ForensicAnalyzerPro
+Date: ${new Date().toISOString()}
+`;
+
+      // Convert to Buffer (in production, use proper PDF generation)
+      return Buffer.from(reportContent, 'utf-8');
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      return Buffer.from('PDF generation failed', 'utf-8');
+    }
   }
 } 

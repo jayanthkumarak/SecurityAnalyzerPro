@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Navigation Test</title>
+</head>
+<body>
+    <h1>Frontend Navigation Test</h1>
+    <p>Testing navigation to report page...</p>
+    
+    <script>
+        // Test navigation to the latest analysis report
+        const analysisId = '59f67bfe-f5b7-4d35-91b4-2770a03fab9a';
+        console.log('Navigating to report:', analysisId);
+        
+        // Navigate to the report page
+        window.location.href = `http://localhost:5173/report/${analysisId}`;
+    </script>
+</body>
+</html> 

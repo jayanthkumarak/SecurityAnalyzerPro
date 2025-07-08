@@ -10,25 +10,22 @@ export interface Artifact {
   size: number;
   mimeType: string;
   hash: string;
-  encryptedData: Buffer;
+  filePath: string;
   createdAt: Date;
   caseId?: string;
 }
 
 export interface StorageConfig {
   dbPath: string;
-  encryptionKey: string;
   artifactsDir: string;
 }
 
 export class StorageManager {
   private db: Database;
   private config: StorageConfig;
-  private encryptionKey: Buffer;
 
   constructor(config: StorageConfig) {
     this.config = config;
-    this.encryptionKey = Buffer.from(config.encryptionKey, 'hex');
     
     // Ensure directories exist
     this.ensureDirectories();
@@ -53,7 +50,7 @@ export class StorageManager {
   }
 
   private initializeDatabase(): void {
-    // Create artifacts table
+    // Create artifacts table - simplified schema
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS artifacts (
         id TEXT PRIMARY KEY,
@@ -62,7 +59,7 @@ export class StorageManager {
         size INTEGER NOT NULL,
         mime_type TEXT NOT NULL,
         hash TEXT NOT NULL,
-        encrypted_data BLOB NOT NULL,
+        file_path TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         case_id TEXT,
         UNIQUE(filename)
@@ -84,17 +81,18 @@ export class StorageManager {
     const id = this.generateId();
     const filename = `${id}_${originalName}`;
     const hash = this.calculateHash(fileBuffer);
+    const filePath = path.join(this.config.artifactsDir, filename);
     
-    // Encrypt the file data
-    const encryptedData = this.encrypt(fileBuffer);
+    // Store file directly to filesystem
+    await fs.promises.writeFile(filePath, fileBuffer);
     
-    // Insert into database
+    // Insert metadata into database
     const query = this.db.query(`
-      INSERT INTO artifacts (id, filename, original_name, size, mime_type, hash, encrypted_data, case_id)
+      INSERT INTO artifacts (id, filename, original_name, size, mime_type, hash, file_path, case_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    query.run(id, filename, originalName, fileBuffer.length, mimeType, hash, encryptedData, caseId);
+    query.run(id, filename, originalName, fileBuffer.length, mimeType, hash, filePath, caseId || null);
     
     return {
       id,
@@ -103,7 +101,7 @@ export class StorageManager {
       size: fileBuffer.length,
       mimeType,
       hash,
-      encryptedData,
+      filePath,
       createdAt: new Date(),
       caseId
     };
@@ -122,7 +120,7 @@ export class StorageManager {
       size: row.size,
       mimeType: row.mime_type,
       hash: row.hash,
-      encryptedData: row.encrypted_data,
+      filePath: row.file_path,
       createdAt: new Date(row.created_at),
       caseId: row.case_id
     };
@@ -132,7 +130,12 @@ export class StorageManager {
     const artifact = await this.getArtifact(id);
     if (!artifact) return null;
     
-    return this.decrypt(artifact.encryptedData);
+    try {
+      return await fs.promises.readFile(artifact.filePath);
+    } catch (error) {
+      console.error('Error reading artifact file:', error);
+      return null;
+    }
   }
 
   async listArtifacts(caseId?: string): Promise<Artifact[]> {
@@ -154,45 +157,28 @@ export class StorageManager {
       size: row.size,
       mimeType: row.mime_type,
       hash: row.hash,
-      encryptedData: row.encrypted_data,
+      filePath: row.file_path,
       createdAt: new Date(row.created_at),
       caseId: row.case_id
     }));
   }
 
   async deleteArtifact(id: string): Promise<boolean> {
+    const artifact = await this.getArtifact(id);
+    if (!artifact) return false;
+    
+    try {
+      // Delete the file
+      await fs.promises.unlink(artifact.filePath);
+    } catch (error) {
+      console.error('Error deleting artifact file:', error);
+      // Continue with database deletion even if file deletion fails
+    }
+    
+    // Delete from database
     const query = this.db.query('DELETE FROM artifacts WHERE id = ?');
     const result = query.run(id);
     return result.changes > 0;
-  }
-
-  private encrypt(data: Buffer): Buffer {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    
-    const encrypted = Buffer.concat([
-      cipher.update(data),
-      cipher.final()
-    ]);
-    
-    const authTag = cipher.getAuthTag();
-    
-    // Combine IV + encrypted data + auth tag
-    return Buffer.concat([iv, encrypted, authTag]);
-  }
-
-  private decrypt(encryptedData: Buffer): Buffer {
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(-16);
-    const encrypted = encryptedData.slice(16, -16);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
-    decipher.setAuthTag(authTag);
-    
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
   }
 
   private calculateHash(data: Buffer): string {

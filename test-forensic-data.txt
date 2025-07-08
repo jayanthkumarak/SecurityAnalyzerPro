@@ -1,0 +1,8 @@
+Timestamp,Event,Source,Details
+2024-01-15 10:30:00,Login,192.168.1.100,User login successful
+2024-01-15 11:45:00,File Access,192.168.1.100,Document accessed: confidential.pdf
+2024-01-15 14:20:00,Network Activity,192.168.1.100,Connection to external server
+2024-01-15 16:15:00,Logout,192.168.1.100,User logout
+2024-01-15 18:30:00,Suspicious Activity,192.168.1.105,Multiple failed login attempts
+2024-01-15 19:45:00,Data Transfer,192.168.1.105,Large file transfer to external IP
+2024-01-15 20:15:00,Firewall Alert,192.168.1.100,Blocked connection attempt 

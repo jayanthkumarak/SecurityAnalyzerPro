@@ -25,6 +25,26 @@ export class MediaGeneratorService {
             }
         }
 
+        // Enhanced timeline: include model start/end and findings
+        const timelineEvents = [];
+        for (const artifact of analysisArtifacts) {
+            timelineEvents.push({
+                timestamp: artifact.timestamp,
+                description: `Model ${artifact.modelName} analysis started.`
+            });
+            for (const finding of (artifact.findings || [])) {
+                timelineEvents.push({
+                    timestamp: artifact.timestamp,
+                    description: `Model ${artifact.modelName} found: ${finding.category} (${finding.severity})`
+                });
+            }
+            timelineEvents.push({
+                timestamp: artifact.timestamp,
+                description: `Model ${artifact.modelName} analysis completed.`
+            });
+        }
+        timelineEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
         return {
             caseId,
             reportTitle: `Rich Media Analysis Report for ${caseId}`,
@@ -40,7 +60,7 @@ export class MediaGeneratorService {
                 { type: 'pie', title: 'Findings by Severity', data: severityCounts }
             ],
             timeline: {
-                events: [ { timestamp: new Date().toISOString(), description: 'Analysis Started' }] // Placeholder
+                events: timelineEvents
             },
             modelBreakdown: analysisArtifacts.reduce((acc, a) => {
                 acc[a.modelName] = { confidence: a.confidence, findingsCount: a.findings.length };

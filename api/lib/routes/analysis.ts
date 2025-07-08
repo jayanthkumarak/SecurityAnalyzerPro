@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { OpenRouterAnalysisService, AnalysisRequest } from '../services/openrouter-analysis-service';
 import { FileParserService } from '../services/file-parser-service';
+import { ReportGenerationService } from '../services/report-generation-service';
 import { randomUUID } from 'crypto';
 
 // In-memory storage for demo purposes
@@ -11,14 +12,8 @@ const liveProgressTrackers = new Map<string, { intervalId: NodeJS.Timeout, curre
 const modelStatuses = new Map<string, Record<string, string>>();
 
 export async function analysisRoutes(fastify: FastifyInstance) {
-  // TODO: Enable authentication in production
-  // fastify.addHook('onRequest', async (request, reply) => {
-  //   try {
-  //     await request.jwtVerify();
-  //   } catch (err) {
-  //     reply.send(err);
-  //   }
-  // });
+  // Simplified authentication - disabled for development
+  // TODO: Enable proper authentication in production
 
   const onSummaryUpdate = (caseId: string, summary: string) => {
     liveAnalysisSummaries.set(caseId, summary);
@@ -207,69 +202,80 @@ export async function analysisRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Stream analysis results
-  fastify.get('/analysis/:id/stream', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+  // REMOVED: SSE streaming endpoint - simplified to staging-only approach
+  // Frontend should use polling with /analysis/:id/status for progress updates
 
-    const analysisRequest = analysisRequests.get(id);
-    // TODO: Enable user check when authentication is enabled
-    // if (analysisRequest?.userId !== userId) {
-    //   return reply.status(403).send({ error: 'Forbidden' });
-    // }
+  // Get visual analysis report - LCARS compatible
+  fastify.get('/analysis/:id/visual-report', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+      
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
 
-    // Set headers for SSE
-    reply.raw.setHeader('Content-Type', 'text/event-stream');
-    reply.raw.setHeader('Connection', 'keep-alive');
-    reply.raw.setHeader('Cache-Control', 'no-cache');
-    const allowedOrigin = process.env.SITE_URL || 'http://localhost:5173';
-    reply.raw.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+      const results = analysisResults.get(id);
+      
+      if (!results) {
+        return reply.status(404).send({ error: 'Analysis not found' });
+      }
 
-    const sendUpdate = () => {
-      try {
-        const summary = liveAnalysisSummaries.get(id) || "Waiting for analysis to start...";
-        const progressTracker = liveProgressTrackers.get(id);
-        const progress = progressTracker ? Math.floor(progressTracker.currentProgress) : 0;
-        const status = analysisResults.get(id)?.status || 'pending';
-        const currentModelStatuses = modelStatuses.get(id) || {};
-  
-        reply.raw.write(`data: ${JSON.stringify({ summary, progress, status, modelStatuses: currentModelStatuses })}\n\n`);
-  
-        if (progressTracker && progressTracker.isComplete) {
-          console.log(`[SSE] Analysis ${id} completed, ending stream.`);
-          clearInterval(updateInterval);
-          reply.raw.end();
+      if (results.status !== 'completed') {
+        return reply.status(202).send({ 
+          message: 'Analysis still in progress',
+          status: results.status,
+          progress: liveProgressTrackers.get(id)?.currentProgress || 0
+        });
+      }
+
+      // Generate LCARS-compatible visual report
+      const visualReport = {
+        analysisId: id,
+        status: 'completed',
+        timestamp: results.timestamp,
+        title: "FORENSIC ANALYSIS REPORT",
+        classification: "CONFIDENTIAL",
+        
+        // Executive summary for LCARS display
+        executiveSummary: {
+          totalFindings: results.artifacts?.length || 0,
+          criticalIssues: results.artifacts?.filter((a: any) => a.findings.some((f: any) => f.severity === 'critical')).length || 0,
+          confidenceScore: results.synthesis?.confidenceScore || 0,
+          processingTime: results.artifacts?.reduce((sum: number, a: any) => sum + a.processingTime, 0) || 0,
+          modelsUsed: results.artifacts?.map((a: any) => a.modelName) || []
+        },
+
+        // Visual data for LCARS components
+        visualData: {
+          severityDistribution: calculateSeverityDistribution(results.artifacts || []),
+          modelPerformance: calculateModelPerformance(results.artifacts || []),
+          timelineData: generateTimelineData(results.artifacts || []),
+          threatLevel: calculateThreatLevel(results.artifacts || [])
+        },
+
+        // Processed findings (not raw model output)
+        processedFindings: results.synthesis?.consensusFindings || [],
+        
+        // High-level recommendations
+        recommendations: generateLCARSRecommendations(results.synthesis?.consensusFindings || []),
+        
+        // System metadata for LCARS
+        systemMetadata: {
+          analysisEngine: "ForensicAnalyzerPro v2.0",
+          stardate: new Date().toISOString(),
+          operator: userId,
+          clearanceLevel: "ALPHA-7"
         }
-      } catch (error) {
-        console.error(`SSE update error for ${id}:`, error);
-        clearInterval(updateInterval);
-        reply.raw.end();
-      }
-    };
+      };
 
-    // Send initial update immediately
-    sendUpdate();
-
-    // Send updates every 500ms for smooth progress bar
-    const updateInterval = setInterval(sendUpdate, 500);
-
-    // Timeout the stream after 175 seconds if not completed to prevent hanging connections
-    const streamTimeout = setTimeout(() => {
-      const tracker = liveProgressTrackers.get(id);
-      if (tracker && !tracker.isComplete) {
-        console.log(`[SSE] Analysis ${id} timed out after 175s, ending stream.`);
-        clearInterval(updateInterval);
-        reply.raw.write(`data: ${JSON.stringify({ summary: "Analysis taking longer than expected.", progress: 99, status: 'timed_out' })}\n\n`);
-        reply.raw.end();
-      }
-    }, 175 * 1000); // 175 seconds
-
-    // Clean up on client disconnect
-    reply.raw.on('close', () => {
-      console.log(`[SSE] Client disconnected for analysis ${id}. Cleaning up.`);
-      clearInterval(updateInterval);
-      clearTimeout(streamTimeout);
-    });
+      reply.send(visualReport);
+    } catch (error) {
+      console.error('Visual report generation error:', error);
+      reply.status(500).send({ error: 'Failed to generate visual report' });
+    }
   });
 
   // Get analysis status
@@ -341,13 +347,11 @@ export async function analysisRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Get analysis report
-  fastify.get('/analysis/:id/report', async (request, reply) => {
+  // Get executive leadership narrative report
+  fastify.get('/analysis/:id/executive-report', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
-      const query = request.query as { format?: string };
-      const format = query.format || 'markdown';
       
       const analysisRequest = analysisRequests.get(id);
       // TODO: Enable user check when authentication is enabled
@@ -361,19 +365,48 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Analysis not found or not completed' });
       }
 
-      const report = results.synthesis.finalReport;
+      // Generate executive narrative using LLM
+      const executiveNarrative = await analysisService.generateExecutiveNarrative(results.artifacts, results.synthesis);
       
-      if (format === 'json') {
-        reply.send({
-          analysisId: id,
-          report: results.synthesis,
-          generatedAt: results.timestamp
-        });
-      } else {
-        reply.type('text/markdown').send(report);
-      }
+      reply.send({
+        analysisId: id,
+        status: 'completed',
+        executiveNarrative,
+        confidence: results.synthesis?.confidenceScore || 0,
+        completedAt: results.timestamp
+      });
     } catch (error) {
-      console.error('Report generation error:', error);
+      console.error('Executive report generation error:', error);
+      reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // Get PDF report
+  fastify.get('/analysis/:id/report.pdf', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
+      
+      const analysisRequest = analysisRequests.get(id);
+      // TODO: Enable user check when authentication is enabled
+      // if (analysisRequest?.userId !== userId) {
+      //   return reply.status(403).send({ error: 'Forbidden' });
+      // }
+
+      const results = analysisResults.get(id);
+      
+      if (!results || results.status !== 'completed') {
+        return reply.status(404).send({ error: 'Analysis not found or not completed' });
+      }
+
+      // Generate PDF report
+      const pdfBuffer = await analysisService.generatePDFReport(results.artifacts, results.synthesis);
+      
+      reply.header('Content-Type', 'application/pdf');
+      reply.header('Content-Disposition', `attachment; filename="forensic-analysis-${id}.pdf"`);
+      return pdfBuffer;
+    } catch (error) {
+      console.error('PDF report generation error:', error);
       reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -415,6 +448,36 @@ export async function analysisRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Test endpoint for rich HTML generation
+  fastify.get('/analysis/:id/test-rich-html', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      
+      // Get the analysis results
+      const results = analysisResults.get(id);
+      if (!results) {
+        return reply.status(404).send({ error: 'Analysis not found' });
+      }
+      
+      // Generate rich HTML from the final report
+      const reportGenerationService = new ReportGenerationService();
+      const richHTML = await reportGenerationService.generateRichHTMLReport(
+        results.synthesis?.finalReport || '# No Report Available\n\nNo analysis report was generated.',
+        {
+          includeCharts: true,
+          includeTimeline: true,
+          includeInteractiveElements: true,
+          theme: 'professional'
+        }
+      );
+      
+      reply.type('text/html').send(richHTML);
+    } catch (error) {
+      console.error('Error generating rich HTML:', error);
+      reply.status(500).send({ error: 'Failed to generate rich HTML report' });
+    }
+  });
+
   // List all analyses
   fastify.get('/analyses', async (request, reply) => {
     try {
@@ -439,3 +502,58 @@ export async function analysisRoutes(fastify: FastifyInstance) {
     }
   });
 } 
+
+// Helper functions for LCARS visual report generation
+function calculateSeverityDistribution(artifacts: any[]) {
+  const severityCount: { critical: number; high: number; medium: number; low: number } = { critical: 0, high: 0, medium: 0, low: 0 };
+  artifacts.forEach((artifact: any) => {
+    artifact.findings?.forEach((finding: any) => {
+      const severity = finding.severity;
+      if (severity === 'critical' || severity === 'high' || severity === 'medium' || severity === 'low') {
+        severityCount[severity as keyof typeof severityCount]++;
+      }
+    });
+  });
+  return severityCount;
+}
+
+function calculateModelPerformance(artifacts: any[]) {
+  return artifacts.map((artifact: any) => ({
+    model: artifact.modelName,
+    confidence: artifact.confidence,
+    processingTime: artifact.processingTime,
+    findingsCount: artifact.findings?.length || 0
+  }));
+}
+
+function generateTimelineData(artifacts: any[]) {
+  return artifacts.map((artifact: any) => ({
+    timestamp: artifact.timestamp,
+    model: artifact.modelName,
+    status: 'completed',
+    findings: artifact.findings?.length || 0
+  }));
+}
+
+function calculateThreatLevel(artifacts: any[]) {
+  const criticalCount = artifacts.reduce((sum: number, a: any) => 
+    sum + (a.findings?.filter((f: any) => f.severity === 'critical').length || 0), 0);
+  const highCount = artifacts.reduce((sum: number, a: any) => 
+    sum + (a.findings?.filter((f: any) => f.severity === 'high').length || 0), 0);
+  
+  if (criticalCount > 0) return 'CRITICAL';
+  if (highCount > 2) return 'HIGH';
+  if (highCount > 0) return 'MEDIUM';
+  return 'LOW';
+}
+
+function generateLCARSRecommendations(findings: any[]) {
+  const recommendations = findings.flatMap(f => f.recommendations || []);
+  const uniqueRecommendations = [...new Set(recommendations)];
+  
+  return uniqueRecommendations.slice(0, 5).map((rec, index) => ({
+    priority: index < 2 ? 'HIGH' : 'MEDIUM',
+    recommendation: rec,
+    category: 'SECURITY'
+  }));
+}
