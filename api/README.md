@@ -153,7 +153,7 @@ OPENROUTER_API_KEY=your_api_key_here
 PORT=4000
 SITE_URL=http://localhost:5173
 ANALYSIS_TIER=pro  # or 'free'
-ENCRYPTION_KEY=auto_generated_if_not_set
+ENCRYPTION_KEY=64_hex_chars_32_bytes_for_aes_256_gcm
 ```
 
 ## Development

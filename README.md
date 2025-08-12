@@ -52,6 +52,7 @@ ANALYSIS_TIER=pro  # or 'free' for single model
 
 # Optional
 PORT=4000
+ENCRYPTION_KEY=64_hex_chars_32_bytes_for_aes_256_gcm
 ```
 
 ### Development

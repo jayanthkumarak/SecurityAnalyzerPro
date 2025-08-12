@@ -179,6 +179,11 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
-.nfs*api/data/staged-artifacts/
+.nfs*
+api/data/staged-artifacts/
 api/data/artifacts.db
 api/data/artifacts/
+api/dist/
+frontend/.svelte-kit/
+frontend/build/
+frontend/dist/

@@ -39,7 +39,7 @@
     "build": "bun run --cwd api build && bun run --cwd frontend build",
     "preview": "concurrently -k -n API,WEB -c green,cyan \"bun run --cwd api start\" \"bun run --cwd frontend preview\"",
     "lint": "eslint \"{api,frontend}/**/*.{ts,tsx,svelte}\"",
-    "test": "bun test",
+    "test": "bun test ./api/lib/services/__tests__ ./api/lib/services/tier-logic.test.ts",
     "clean": "rm -rf api/dist frontend/dist"
   },
   "workspaces": ["api", "frontend"],

@@ -25,8 +25,18 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   const analysisService = new OpenRouterAnalysisService(onSummaryUpdate);
   const fileParser = new FileParserService();
 
+  // Require auth for analysis endpoints in non-development environments
+  const requireAuth = async (request: any, reply: any) => {
+    if (process.env.NODE_ENV === 'development') return; // allow during dev
+    try {
+      await (request as any).jwtVerify();
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  };
+
   // Start multi-LLM analysis
-  fastify.post('/analyze', async (request, reply) => {
+  fastify.post('/analyze', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const files = request.files();
       const parsedContents: string[] = [];
@@ -131,6 +141,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
       modelStatuses.set(caseId, initialModelStatuses);
 
       // Return immediately with analysis ID
+      // Do not expose raw model outputs; only identifiers and status
       reply.send({
         analysisId: caseId,
         status: 'started',
@@ -149,7 +160,15 @@ export async function analysisRoutes(fastify: FastifyInstance) {
         analysisResults.set(caseId, {
           status: 'completed',
           timestamp: new Date(),
-          artifacts,
+          // Strip rawResponse before storing for API exposure
+          artifacts: artifacts.map(a => ({
+            modelName: a.modelName,
+            timestamp: a.timestamp,
+            findings: a.findings,
+            confidence: a.confidence,
+            processingTime: a.processingTime,
+            tokenUsage: a.tokenUsage
+          })),
           synthesis
         });
 
@@ -206,7 +225,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   // Frontend should use polling with /analysis/:id/status for progress updates
 
   // Get visual analysis report - LCARS compatible
-  fastify.get('/analysis/:id/visual-report', async (request, reply) => {
+  fastify.get('/analysis/:id/visual-report', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -279,7 +298,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Get analysis status
-  fastify.get('/analysis/:id/status', async (request, reply) => {
+  fastify.get('/analysis/:id/status', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -310,7 +329,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Get analysis results
-  fastify.get('/analysis/:id/results', async (request, reply) => {
+  fastify.get('/analysis/:id/results', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -337,7 +356,15 @@ export async function analysisRoutes(fastify: FastifyInstance) {
       reply.send({
         analysisId: id,
         status: results.status,
-        artifacts: results.artifacts,
+        // Ensure artifacts do not include raw model outputs
+        artifacts: (results.artifacts || []).map((a: any) => ({
+          modelName: a.modelName,
+          timestamp: a.timestamp,
+          findings: a.findings,
+          confidence: a.confidence,
+          processingTime: a.processingTime,
+          tokenUsage: a.tokenUsage
+        })),
         synthesis: results.synthesis,
         completedAt: results.timestamp
       });
@@ -348,7 +375,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Get executive leadership narrative report
-  fastify.get('/analysis/:id/executive-report', async (request, reply) => {
+  fastify.get('/analysis/:id/executive-report', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -382,7 +409,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Get PDF report
-  fastify.get('/analysis/:id/report.pdf', async (request, reply) => {
+  fastify.get('/analysis/:id/report.pdf', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -412,7 +439,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Get rich media analysis results
-  fastify.get('/analysis/:id/rich-results', async (request, reply) => {
+  fastify.get('/analysis/:id/rich-results', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
@@ -449,7 +476,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // Test endpoint for rich HTML generation
-  fastify.get('/analysis/:id/test-rich-html', async (request, reply) => {
+  fastify.get('/analysis/:id/test-rich-html', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const { id } = request.params as { id: string };
       
@@ -479,7 +506,7 @@ export async function analysisRoutes(fastify: FastifyInstance) {
   });
 
   // List all analyses
-  fastify.get('/analyses', async (request, reply) => {
+  fastify.get('/analyses', { preHandler: requireAuth }, async (request: any, reply: any) => {
     try {
       const userId = 'demo-user'; // TODO: Get from JWT when authentication is enabled
       const analyses = Array.from(analysisResults.entries())

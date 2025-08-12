@@ -13,6 +13,10 @@ export interface Artifact {
   filePath: string;
   createdAt: Date;
   caseId?: string;
+  // Encryption metadata (optional for backward compatibility)
+  iv?: string; // base64
+  authTag?: string; // base64
+  isEncrypted?: boolean;
 }
 
 export interface StorageConfig {
@@ -70,6 +74,14 @@ export class StorageManager {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_artifacts_case_id ON artifacts(case_id)
     `);
+
+    // Ensure encryption columns exist (best-effort migration)
+    try {
+      this.db.exec(`ALTER TABLE artifacts ADD COLUMN iv TEXT`);
+    } catch {}
+    try {
+      this.db.exec(`ALTER TABLE artifacts ADD COLUMN auth_tag TEXT`);
+    } catch {}
   }
 
   async storeArtifact(
@@ -83,16 +95,19 @@ export class StorageManager {
     const hash = this.calculateHash(fileBuffer);
     const filePath = path.join(this.config.artifactsDir, filename);
     
-    // Store file directly to filesystem
-    await fs.promises.writeFile(filePath, fileBuffer);
+    // Encrypt file contents using AES-256-GCM
+    const { ciphertext, iv, authTag } = this.encryptBuffer(fileBuffer);
+    
+    // Store encrypted file to filesystem
+    await fs.promises.writeFile(filePath, ciphertext);
     
     // Insert metadata into database
     const query = this.db.query(`
-      INSERT INTO artifacts (id, filename, original_name, size, mime_type, hash, file_path, case_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO artifacts (id, filename, original_name, size, mime_type, hash, file_path, case_id, iv, auth_tag)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    query.run(id, filename, originalName, fileBuffer.length, mimeType, hash, filePath, caseId || null);
+    query.run(id, filename, originalName, fileBuffer.length, mimeType, hash, filePath, caseId || null, iv, authTag);
     
     return {
       id,
@@ -103,7 +118,10 @@ export class StorageManager {
       hash,
       filePath,
       createdAt: new Date(),
-      caseId
+      caseId,
+      iv,
+      authTag,
+      isEncrypted: true
     };
   }
 
@@ -122,7 +140,10 @@ export class StorageManager {
       hash: row.hash,
       filePath: row.file_path,
       createdAt: new Date(row.created_at),
-      caseId: row.case_id
+      caseId: row.case_id,
+      iv: row.iv || undefined,
+      authTag: row.auth_tag || undefined,
+      isEncrypted: !!(row.iv && row.auth_tag)
     };
   }
 
@@ -131,7 +152,12 @@ export class StorageManager {
     if (!artifact) return null;
     
     try {
-      return await fs.promises.readFile(artifact.filePath);
+      const data = await fs.promises.readFile(artifact.filePath);
+      // Decrypt if encryption metadata present, otherwise return as-is (backward compatibility)
+      if (artifact.iv && artifact.authTag) {
+        return this.decryptBuffer(data, artifact.iv, artifact.authTag);
+      }
+      return data;
     } catch (error) {
       console.error('Error reading artifact file:', error);
       return null;
@@ -159,7 +185,8 @@ export class StorageManager {
       hash: row.hash,
       filePath: row.file_path,
       createdAt: new Date(row.created_at),
-      caseId: row.case_id
+      caseId: row.case_id,
+      isEncrypted: !!(row.iv && row.auth_tag)
     }));
   }
 
@@ -187,6 +214,37 @@ export class StorageManager {
 
   private generateId(): string {
     return crypto.randomBytes(16).toString('hex');
+  }
+
+  private getEncryptionKey(): Buffer {
+    const keyHex = process.env.ENCRYPTION_KEY || '';
+    if (!keyHex) {
+      console.warn('[StorageManager] ENCRYPTION_KEY not set. Generating ephemeral key (NOT FOR PRODUCTION).');
+      return crypto.randomBytes(32);
+    }
+    const key = Buffer.from(keyHex, 'hex');
+    if (key.length !== 32) {
+      throw new Error('ENCRYPTION_KEY must be 32 bytes (64 hex characters) for AES-256-GCM');
+    }
+    return key;
+  }
+
+  private encryptBuffer(plaintext: Buffer): { ciphertext: Buffer; iv: string; authTag: string } {
+    const key = this.getEncryptionKey();
+    const ivBuf = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, ivBuf);
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return { ciphertext, iv: ivBuf.toString('base64'), authTag: authTag.toString('base64') };
+  }
+
+  private decryptBuffer(ciphertext: Buffer, ivB64: string, authTagB64: string): Buffer {
+    const key = this.getEncryptionKey();
+    const iv = Buffer.from(ivB64, 'base64');
+    const authTag = Buffer.from(authTagB64, 'base64');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   }
 
   close(): void {
