@@ -6,7 +6,7 @@ AI-powered digital forensics platform with multi-LLM analysis capabilities. Uplo
 
 - **Multi-LLM Analysis**: Leverages multiple AI models (Gemini, GPT-4, Claude, DeepSeek) for comprehensive analysis
 - **LCARS Star Trek UI**: Futuristic interface with cyan, pink, purple, and yellow color scheme
-- **Real-time Streaming**: Live analysis progress with Server-Sent Events (SSE)
+- **Progress Updates**: Live progress via polling (SSE currently disabled)
 - **File Upload & Processing**: Support for various digital artifact formats (JSON, XML, CSV, LOG, TXT, EVTX)
 - **Tiered Analysis**: Free tier (1 model) and Pro tier (5 models) options
 - **RESTful API**: Fastify-based backend for scalable processing
@@ -112,7 +112,8 @@ ForensicAnalyzerPro/
 
 - `POST /analyze` - Start forensic analysis with file uploads
 - `GET /analysis/:id/status` - Check analysis status
-- `GET /analysis/:id/stream` - SSE stream for live updates
+// SSE endpoint currently disabled (use polling)
+// - `GET /analysis/:id/stream` - SSE stream for live updates
 - `GET /analysis/:id/results` - Get analysis results
 - `GET /analysis/:id/report` - Download report (markdown/json)
 
