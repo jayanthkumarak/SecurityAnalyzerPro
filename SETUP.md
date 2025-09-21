@@ -121,16 +121,16 @@ pm2 start ecosystem.config.js
 pm2 logs
 ```
 
+<!--
 ### Using Docker
-```bash
+This section will be added once containerization files are included in the repo.
 # Build image
-docker build -t forensicanalyzerpro .
-
+# docker build -t forensicanalyzerpro .
 # Run container
-docker run -p 4000:4000 -p 5173:5173 \
-  -e OPENROUTER_API_KEY=your_key \
-  forensicanalyzerpro
-```
+# docker run -p 4000:4000 -p 5173:5173 \
+#   -e OPENROUTER_API_KEY=your_key \
+#   forensicanalyzerpro
+-->
 
 ### Environment Variables for Production
 ```env
