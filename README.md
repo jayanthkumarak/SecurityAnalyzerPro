@@ -71,8 +71,8 @@ bun run dev:web   # Frontend on http://localhost:5173
 # Build both applications
 bun run build
 
-# Start production servers
-bun run start
+# Preview production servers
+bun run preview
 ```
 
 ## 📁 Project Structure
@@ -176,9 +176,6 @@ The interface features a Star Trek LCARS-inspired design with:
 ```bash
 # Run tests
 bun test
-
-# Run linting
-bun run lint
 ```
 
 ## 🤝 Contributing

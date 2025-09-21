@@ -163,10 +163,10 @@ ENCRYPTION_KEY=auto_generated_if_not_set
 bun install
 
 # Run development server with hot reload
-bun run dev
+ebun run dev
 
 # Run production server
-bun run start
+ebun run start
 
 # Run tests
 bun test
@@ -223,22 +223,10 @@ bun test storage-manager.test.ts
 
 ## Deployment
 
-The API is designed to run on Bun runtime for optimal performance:
-
 ```bash
 # Build for production
-bun build index.ts --target=bun
+bun run build
 
 # Run production server
 bun run start
-```
-
-For containerization, use the Bun Docker image:
-```dockerfile
-FROM oven/bun:1
-WORKDIR /app
-COPY . .
-RUN bun install
-EXPOSE 4000
-CMD ["bun", "run", "start"]
 ```
